@@ -1,33 +1,31 @@
-#from socket import AF_INET, socket, SOCK_STREAM
 import socket
 from threading import Thread
 import sys
 import time
 import json
-#userbase = ["Satyam","Rohit","Ashay","Jalaj","Shruti","Biswajit","Mansi"]
 with open("userbase.json") as db:
     userbase = json.load(db)
-#HOST = '10.145.233.242'
-HOST = sys.argv[1]
-PORT = int(sys.argv[2])
-BUFSIZ = 1024
-ADDR = (HOST, PORT)
-
-clients = {}
-addresses = {}
 
 if len(sys.argv)!=3:
     print("Usage:python <filename> <host> <port>")
     sys.exit(1)
 
+HOST = sys.argv[1]
+PORT = int(sys.argv[2])
+BUFSIZ = 1024
+USERNAME_SIZ = 20
+ADDR = (HOST, PORT)
+
+clients = {}
+addresses = {}
+
+
 def accept_incoming_connections():
     """Sets up handling for incoming clients."""
     try:
         while True:
-            #print("hello")
             client, client_address = SERVER.accept()
             print("%s:%s has connected." % client_address)
-            broadcast_selective(bytes("Greetings from the cave! Now type your name and press enter!", "utf8"),[client])
             addresses[client] = client_address
             Thread(target=handle_client, args=(client,client_address,)).start()
     except KeyboardInterrupt:
@@ -62,10 +60,58 @@ def authentication(client):         # Returns <credentials' validity> <Retry?> <
     print("<%s> successfully logged in" %username)
     return True,False,username
 
+def client_signup(client):              #Vulnerable. Returns userID,status,connection
+    try:
+        userID = client.recv(USERNAME_SIZ).decode("utf-8")
+    except:
+        return None,False,False
+    for index in range(20):
+        if userID[index]=='#':
+            userID = userID[:index]
+            break
+    
+    password = client.recv(BUFSIZ).decode("utf-8")
+    if userID in userbase:
+        return userID,False,True
+    else:
+        userbase[userID] = password
+        with open("userbase.json","w") as db:
+            json.dump(userbase,db)
+        return userID,True,True
 
 def handle_client(client,client_address):  # Takes client socket as argument.
     """Handles a single client connection."""
 
+    while True:
+        ch = client.recv(BUFSIZ).decode("utf-8")
+        if not ch:
+            broadcast_selective(bytes("{quit}", "utf8"),[client])
+            #client.sendall(bytes("{quit}", "utf8"))
+            print("%s:%s has disconnected." % client_address)
+            client.close()
+            return
+        if ch=='2':
+            print("<%s> requesting user sign-up" %str(client_address))
+            userID,status,connected = client_signup(client)
+            if not connected:
+                print("%s:%s has disconnected." % client_address)
+                client.close()
+                return
+            print("returned")
+            if status:
+                print("User <"+userID+"> has been registered from <"+str(client_address)+">")
+                broadcast_selective(bytes("Y","utf-8"),[client])
+            else:
+                print("User <"+userID+"> has been NOT BEEN registered from <"+str(client_address)+">")
+                broadcast_selective(bytes("N","utf-8"),[client])
+        if ch=='1':
+            break
+        if ch=='3':
+            print("%s:%s has disconnected." % client_address)
+            client.close()
+            return            
+
+    broadcast_selective(bytes("Greetings from the cave! Now type your name and press enter!", "utf8"),[client])
     while True:
         valid, retry, username = authentication(client)
         if valid:
@@ -73,7 +119,7 @@ def handle_client(client,client_address):  # Takes client socket as argument.
         
         if not retry:
             broadcast_selective(bytes("{quit}", "utf8"),[client])
-            #client.send(bytes("{quit}", "utf8"))
+            #client.sendall(bytes("{quit}", "utf8"))
             print("%s:%s has disconnected." % client_address)
             client.close()
             return
@@ -107,7 +153,7 @@ def broadcast_global(msg,client_address=None, prefix=""):  # prefix is for name 
     invalid_clients=[]
     for client in clients:
         try:
-            client.send(bytes(prefix, "utf8")+msg)
+            client.sendall(bytes(prefix, "utf8")+msg)
         except BrokenPipeError:
             invalid_clients.append(client)
             continue
@@ -122,7 +168,7 @@ def broadcast_selective(msg,client_list):
     invalid_clients=[]
     for index in range(len(client_list)):
         try:
-            (client_list[index]).send(msg)
+            (client_list[index]).sendall(msg)
         except BrokenPipeError or OSError:
             invalid_clients.append(client_list[index])
             continue
@@ -149,13 +195,15 @@ if __name__ == "__main__":
                 print("Closing Server. Exitting....")
                 SERVER.close()
                 sys.exit(1)
+            else:
+                print("<System Message>:Unknown Command")
         ACCEPT_THREAD.join()
         SERVER.close()
     except KeyboardInterrupt:
         print("Caught Keyboard Interrupt")
         for client in clients:
-            client.send(bytes("*****Server Disconnected*******", "utf8"))
-            client.send(bytes("{quit}", "utf8"))
+            client.sendall(bytes("*****Server Disconnected*******", "utf8"))
+            client.sendall(bytes("{quit}", "utf8"))
             
         SERVER.close()
         sys.exit(1)
