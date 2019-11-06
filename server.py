@@ -14,6 +14,7 @@ HOST = sys.argv[1]
 PORT = int(sys.argv[2])
 BUFSIZ = 1024
 USERNAME_SIZ = 20
+PASSWORD_SIZ = 64
 ADDR = (HOST, PORT)
 
 clients = {}
@@ -33,33 +34,40 @@ def accept_incoming_connections():
     finally:
         return
 
-def authentication(client):         # Returns <credentials' validity> <Retry?> <Username(=None, when invalid)>
-    broadcast_selective(bytes("Enter Your Username", "utf8"),[client])
-    username = client.recv(BUFSIZ).decode("utf8")
-    if not username:
-        client.close()
-        return False,False,None
-    elif username == "{quit}":
-        broadcast_selective(bytes("{quit}", "utf8"),[client])
-        return False,False,None
-       
-    print("<%s> is attempting to login" %username)
-    broadcast_selective(bytes("Enter Password","utf-8"),[client])
-    password = client.recv(BUFSIZ).decode("utf8")
-    if not password:
-        client.close()
-        return False,False,None
-    elif password == "{quit}":
-        broadcast_selective(bytes("{quit}", "utf8"),[client])
-        return False,False,None
-    
-    if username not in userbase or password != userbase[username]:
-        broadcast_selective(bytes("Invalid Username or Password", "utf8"),[client])
-        print("<%s> Invalid Username/Password" %username)
-        return False,True,None
-    print("<%s> successfully logged in" %username)
-    return True,False,username
-
+def authentication(client):         # Returns <credentials' validity> <Connected> <Username(=None, when invalid)>
+    #broadcast_selective(bytes("Enter Your Username", "utf8"),[client])
+    try:
+        username = client.recv(USERNAME_SIZ).decode("utf8")
+        for index in range(len(username)):
+            if username[index]=="#":
+                username = username[:index]
+                break
+        time.sleep(0.5)
+        password = client.recv(PASSWORD_SIZ).decode("utf8")
+        if not username:
+            client.close()
+            return False,True,None
+        elif username == "{quit}":
+            broadcast_selective(bytes("N", "utf8"),[client])
+            return False,True,None
+           
+        print("<%s> is attempting to login" %username)
+        #broadcast_selective(bytes("Enter Password","utf-8"),[client])
+        if not password:
+            client.close()
+            return False,True,None
+        elif password == "{quit}":
+            broadcast_selective(bytes("N", "utf8"),[client])
+            return False,True,None
+        
+        if username not in userbase or password != userbase[username]:
+            broadcast_selective(bytes("N", "utf8"),[client])
+            print("<%s> Invalid Username/Password" %username)
+            return False,True,None
+        print("<%s> successfully logged in" %username)
+        return True, True, username
+    except OSError:
+        return None, False, None
 def client_signup(client):              #Vulnerable. Returns userID,status,connection
     try:
         userID = client.recv(USERNAME_SIZ).decode("utf-8")
@@ -82,47 +90,57 @@ def client_signup(client):              #Vulnerable. Returns userID,status,conne
 def handle_client(client,client_address):  # Takes client socket as argument.
     """Handles a single client connection."""
 
-    while True:
-        ch = client.recv(BUFSIZ).decode("utf-8")
-        if not ch:
-            broadcast_selective(bytes("{quit}", "utf8"),[client])
-            #client.sendall(bytes("{quit}", "utf8"))
-            print("%s:%s has disconnected." % client_address)
-            client.close()
-            return
-        if ch=='2':
-            print("<%s> requesting user sign-up" %str(client_address))
-            userID,status,connected = client_signup(client)
-            if not connected:
+    try:
+        while True:
+            ch = client.recv(BUFSIZ).decode("utf-8")
+            if not ch:
+                broadcast_selective(bytes("{quit}", "utf8"),[client])
+                #client.sendall(bytes("{quit}", "utf8"))
                 print("%s:%s has disconnected." % client_address)
                 client.close()
                 return
-            print("returned")
-            if status:
-                print("User <"+userID+"> has been registered from <"+str(client_address)+">")
-                broadcast_selective(bytes("Y","utf-8"),[client])
-            else:
-                print("User <"+userID+"> has been NOT BEEN registered from <"+str(client_address)+">")
-                broadcast_selective(bytes("N","utf-8"),[client])
-        if ch=='1':
-            break
-        if ch=='3':
-            print("%s:%s has disconnected." % client_address)
-            client.close()
-            return            
-
+            if ch=='2':
+                print("<%s> requesting user sign-up" %str(client_address))
+                userID,status,connected = client_signup(client)
+                if not connected:
+                    print("%s:%s has disconnected." % client_address)
+                    client.close()
+                    return
+                if status:
+                    print("User <"+userID+"> has been registered from <"+str(client_address)+">")
+                    broadcast_selective(bytes("Y","utf-8"),[client])
+                else:
+                    print("User <"+userID+"> has been NOT BEEN registered from <"+str(client_address)+">")
+                    broadcast_selective(bytes("N","utf-8"),[client])
+            if ch=='1':
+                valid, connected, username = authentication(client)
+                if not connected:
+                    print("%s:%s has disconnected." % client_address)
+                    client.close()
+                    return
+                if valid:
+                    broadcast_selective(bytes("Y","utf-8"),[client])
+                    break
+                
+            if ch=='3':
+                print("%s:%s has disconnected." % client_address)
+                client.close()
+                return            
+    except OSError:
+        print("%s:%s has disconnected." % client_address)
+        client.close()
+        return
     broadcast_selective(bytes("Greetings from the cave! Now type your name and press enter!", "utf8"),[client])
-    while True:
-        valid, retry, username = authentication(client)
-        if valid:
-            break
+   # while True:
         
-        if not retry:
-            broadcast_selective(bytes("{quit}", "utf8"),[client])
-            #client.sendall(bytes("{quit}", "utf8"))
-            print("%s:%s has disconnected." % client_address)
-            client.close()
-            return
+        
+        
+   #"""     else:
+   #         broadcast_selective(bytes("{quit}", "utf8"),[client])
+   #         #client.sendall(bytes("{quit}", "utf8"))
+   #         print("%s:%s has disconnected." % client_address)
+   #         client.close()
+   #         return"""
 
     welcome = 'Welcome ! If you ever want to quit, type {quit} to exit.'
     broadcast_selective(bytes(welcome, "utf8"),[client])
@@ -173,7 +191,7 @@ def broadcast_selective(msg,client_list):
             invalid_clients.append(client_list[index])
             continue
     for client in invalid_clients:
-        print("%s:%s has disconnected." % client_address)
+        print("%s has disconnected." %client)
         client.close()
         del clients[client]
         broadcast_global(bytes("%s has left the chat." % name, "utf8"))

@@ -3,6 +3,8 @@ from threading import Thread
 import sys
 import tkinter
 import time
+import hashlib
+import getpass
 
 
 def receive():
@@ -11,7 +13,6 @@ def receive():
         #print(4)
         try:
             msg = client_socket.recv(BUFSIZ).decode("utf8")
-            print(msg)
             #client_socket.settimeout(None)            
             if not msg or msg=="{quit}":
                 client_socket.close()
@@ -32,7 +33,6 @@ def receive():
 
 def send(event=None):  # event is passed by binders.
     """Handles sending of messages."""
-    print(5)
     try:
         msg = my_msg.get()
         my_msg.set("")  # Clears input field.
@@ -61,15 +61,31 @@ def on_closing(event=None):
     send()
 
 def client_signup(client):
-    username = input("Enter Desired Username(max 20 characters):")    #Vulnerable
-    password = input("Enter Desired Password:")    #Vulnerable
-    for i in range(len(username),20):
+    while True:
+        username = input("Enter Desired Username(max 20 characters):")    #Vulnerable
+        if len(username)>20:
+            print("Invalid Username. Please choose a username of length upto 20 characters")
+        else:
+            break
+    while True:
+        password = getpass.getpass("Choose Your Password(Upto 32 characters):")    #Vulnerable
+        if len(password)>32:
+            print("Invalid Username. Please choose a username of length upto 20 characters")
+            continue
+        re_password = getpass.getpass("Re-Enter Your Password:")
+        if password == re_password:
+            hashpassword = (hashlib.sha256(password.encode())).hexdigest()
+            break
+        else:
+            print("Password Doesn't Match")
+        #print(hashpassword)
+    for padding_index in range(len(username),20):
         username+="#"
     try:    
         client.sendall(bytes(username,"utf-8"))
 
         #time.sleep(0.5)
-        client.sendall(bytes(password,"utf-8"))
+        client.sendall(bytes(hashpassword,"utf-8"))
 
         status = client.recv(BUFSIZ).decode("utf-8")
         if not status:
@@ -80,12 +96,25 @@ def client_signup(client):
         client.close()
         sys.exit(1)
     
-    print("status:",status)
     if status=='Y':
         return True
     else:
         return False
     
+def login(client):
+    #prompt = client.recv(1024).decode("utf-8")
+    username = input("Username:")
+    for padding_index in range(len(username),20):
+        username+="#"
+    client.sendall(bytes(username[:20],"utf-8"))
+    password = hashlib.sha256(getpass.getpass("Password:").encode()).hexdigest()
+    client.sendall(bytes(password,"utf-8"))
+    status = client.recv(1).decode("utf-8")
+    if status == "Y":
+        return True
+    else:
+        return False
+
 
 if __name__ == "__main__":
     
@@ -110,7 +139,12 @@ if __name__ == "__main__":
             choice = input("1. Chatroom\n2. Signup\n3. Quit\nInput:")
             if choice=="1":
                 client_socket.sendall(bytes("1","utf-8"))
-                break
+                if login(client_socket):
+                    print("Successfully Logged In")
+                    break
+                else:
+                    print("Invalid Username/Password")
+                    continue
             elif choice=="2":
                 client_socket.sendall(bytes("2","utf-8"))
                 if client_signup(client_socket):
