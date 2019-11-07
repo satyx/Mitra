@@ -134,6 +134,11 @@ if __name__ == "__main__":
     try:
         top = None #GUI Instance
         client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        # Note: Keeping the flag setblocking as False would lead to trigger actions on the client side
+                #Even if the connection is still not established
+        #client_socket.setblocking(False)        #Don't wait or "hang" for the connection to establish
+        #client_socket.connect_ex(ADDR)          #sock.connect() would have immediately raised an error as sock.setblocking()
+                                                # is set false
         client_socket.connect(ADDR)
         while True:
             choice = input("1. Chatroom\n2. Signup\n3. Quit\nInput:")
@@ -197,6 +202,7 @@ if __name__ == "__main__":
         sys.exit(1)
     except ConnectionRefusedError:
         print("The server (%s:%s) is not active. Exitting..." %ADDR)
-        top.quit()
+        if top != None:
+            top.quit()
         sys.exit(1)
         
