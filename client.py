@@ -14,7 +14,7 @@ def receive():
         try:
             msg = client_socket.recv(BUFSIZ).decode("utf8")
             #client_socket.settimeout(None)            
-            if not msg or msg=="{quit}":
+            if not msg or msg=="<QUIT>":
                 client_socket.close()
                 top.quit()
                 break
@@ -34,10 +34,17 @@ def receive():
 def send(event=None):  # event is passed by binders.
     """Handles sending of messages."""
     try:
-        msg = my_msg.get()
+        msg = my_msg.get().strip()
         my_msg.set("")  # Clears input field.
-        client_socket.sendall(bytes(msg, "utf8"))
-        if msg == "{quit}":
+        if len(msg)==0:
+            return
+        for index in range(0,len(msg),1013):
+            msg_slice = "<START>"+msg[index:index+1013]
+        
+            msg_slice = str("%04d"%len(msg_slice))+msg_slice
+            client_socket.sendall(bytes(msg_slice, "utf8"))
+        client_socket.sendall(bytes("0005<END>", "utf8"))
+        if len(msg)==10 and msg[4:] == "<QUIT>":
             #print(6)
             client_socket.close()
             top.quit()
@@ -57,7 +64,7 @@ def send(event=None):  # event is passed by binders.
 def on_closing(event=None):
     """This function is to be called when the window is closed."""
     #print(7)
-    my_msg.set("{quit}")
+    my_msg.set("<QUIT>")
     send()
 
 def client_signup(client):
