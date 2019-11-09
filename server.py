@@ -23,8 +23,6 @@ addresses = {}
 user_client = {}
 
 
-
-
 def accept_incoming_connections():
     """Sets up handling for incoming clients."""
     try:
@@ -269,18 +267,15 @@ def broadcast_selective(raw_msg,client_list,system=False):
         del clients[client]
         broadcast_global(bytes("%s has left the chat." % invalid_clients[client], "utf8"))
 
+
 def update_upon_login(client):
     with open(r"chat_backup.txt","r") as chat_backup:
         lines = chat_backup.read().splitlines()   #For safety max. number of bytes are mentioned
         for line in lines:
-            modified_line = "<SYSTEM>"+line[6:-1]
+            modified_line = "<SYSTEM>"+line[6:]
             modified_line = ("%04d" %len(modified_line))+modified_line
             client.sendall(bytes(modified_line,"utf-8"))
     return
-
-
-
-
 
 
 if __name__ == "__main__":
@@ -315,8 +310,11 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("<SYSTEM>:Caught Keyboard Interrupt")
         for client in clients:
-            client.sendall(bytes("*****Server Disconnected*******", "utf8"))
-            client.sendall(bytes("<QUIT>", "utf8"))
+            server_disconnect = bytes("*****Server Disconnected*****","utf-8")
+            broadcast_global(server_disconnect)
+            #client.sendall(bytes("*****Server Disconnected*****", "utf8"))
+            broadcast_global(bytes("<QUIT>", "utf8"),system=True)
+            #client.sendall(bytes("<QUIT>", "utf8"))
             
         SERVER.close()
         sys.exit(1)

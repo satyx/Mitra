@@ -82,8 +82,10 @@ def send(event=None):  # event is passed by binders.
 
 def on_closing(event=None):
     """This function is to be called when the window is closed."""
+    top.quit()
     my_msg.set("<QUIT>")
     send()
+    top.quit()
 
 def client_signup(client):
 
