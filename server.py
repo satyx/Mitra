@@ -150,8 +150,8 @@ def handle_client(client,client_address):  # Takes client socket as argument.
         last_client = None
         client.close()
         return
-
-    welcome = 'Welcome ! If you ever want to quit, type <QUIT> to exit.'
+    update_upon_login(client)
+    welcome = '****Welcome ! If you ever want to quit, type <QUIT> to Exit****'
     broadcast_selective(bytes(welcome, "utf8"),[client],system=True)
     msg = "%s has joined the chat!" % username
     broadcast_global(bytes(msg, "utf8"),client_address,system=True)
@@ -205,6 +205,14 @@ def broadcast_global(raw_msg,client_address=None, prefix="",system=False):  # pr
     if last_client !=prefix:
         raw_msg = prefix+raw_msg
     
+    if raw_msg!="<QUIT>":
+        with open("chat_backup.txt","a") as chatfile:
+            if system:
+                chatfile.write("<0000>"+raw_msg+"\n") #0000 corresponds to system's message
+            else:
+                chatfile.write("<0001>"+raw_msg+"\n")   #0001 corresponds to system's message
+
+
     for client in clients:
         try:
             if system:
@@ -261,6 +269,19 @@ def broadcast_selective(raw_msg,client_list,system=False):
         del clients[client]
         broadcast_global(bytes("%s has left the chat." % invalid_clients[client], "utf8"))
 
+def update_upon_login(client):
+    with open(r"chat_backup.txt","r") as chat_backup:
+        lines = chat_backup.read().splitlines()   #For safety max. number of bytes are mentioned
+        for line in lines:
+            modified_line = "<SYSTEM>"+line[6:-1]
+            modified_line = ("%04d" %len(modified_line))+modified_line
+            client.sendall(bytes(modified_line,"utf-8"))
+    return
+
+
+
+
+
 
 if __name__ == "__main__":
     try:
@@ -275,17 +296,24 @@ if __name__ == "__main__":
         while True:
             z = input()
             if z == "<QUIT>":
-                print("Closing Server. Exitting....")
+                print("<SYSTEM>:Closing Server. Exitting....")
+                broadcast_global(bytes("<QUIT>","utf-8"),system=True)
                 SERVER.close()
                 sys.exit(1)
-            if z == "<Active Users>":
-                print(user_client)
+            elif z == "<ACTIVE USERS>":
+                print("<SYSTEM>:"+repr(user_client.keys()))
+            elif z == "<DELETE CHAT BACKUP>":
+                if len(user_client)==0:
+                    open("chat_backup.txt","w").close()
+                    print("<SYSTEM>:Data Cleared Successfully")
+                else:
+                    print("<SYSTEM>:Chatroom Currently Active")
             else:
                 print("<System>:Unknown Command")
         ACCEPT_THREAD.join()
         SERVER.close()
     except KeyboardInterrupt:
-        print("Caught Keyboard Interrupt")
+        print("<SYSTEM>:Caught Keyboard Interrupt")
         for client in clients:
             client.sendall(bytes("*****Server Disconnected*******", "utf8"))
             client.sendall(bytes("<QUIT>", "utf8"))
