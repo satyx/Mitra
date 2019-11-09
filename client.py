@@ -68,6 +68,8 @@ def on_closing(event=None):
     send()
 
 def client_signup(client):
+
+    #For UI
     while True:
         username = input("Enter Desired Username(max 20 characters):")    #Vulnerable
         if len(username)>20:
@@ -85,13 +87,14 @@ def client_signup(client):
             break
         else:
             print("Password Doesn't Match")
-        #print(hashpassword)
-    for padding_index in range(len(username),20):
-        username+="#"
-    try:    
+
+    #Application Layer Protocol
+    try:
+        username = ("%04d" %len(username))+username
         client.sendall(bytes(username,"utf-8"))
 
         #time.sleep(0.5)
+        hashpassword = ("%04d" %len(hashpassword))+hashpassword
         client.sendall(bytes(hashpassword,"utf-8"))
 
         status = client.recv(BUFSIZ).decode("utf-8")
@@ -110,13 +113,27 @@ def client_signup(client):
     
 def login(client):
     #prompt = client.recv(1024).decode("utf-8")
-    username = input("Username:")
-    for padding_index in range(len(username),20):
-        username+="#"
-    client.sendall(bytes(username[:20],"utf-8"))
-    password = hashlib.sha256(getpass.getpass("Password:").encode()).hexdigest()
-    client.sendall(bytes(password,"utf-8"))
-    status = client.recv(1).decode("utf-8")
+    raw_username = input("Username:")
+    raw_password = getpass.getpass("Password:")
+
+    if len(raw_username)>20 or len(raw_password)>32:
+        return False
+
+
+    username = ("%04d" %len(raw_username))+raw_username
+    raw_hashed_password = hashlib.sha256(raw_password.encode()).hexdigest()
+    hashed_password = ("%04d" %len(raw_hashed_password))+raw_hashed_password
+
+    try:
+        client.sendall(bytes(username,"utf-8"))
+        client.sendall(bytes(hashed_password,"utf-8"))
+        status = client.recv(1).decode("utf-8")
+
+    except:
+        print("Exception Raised at login()")
+        client.close()
+        sys.exit(1)
+
     if status == "Y":
         return True
     else:
@@ -149,8 +166,9 @@ if __name__ == "__main__":
         client_socket.connect(ADDR)
         while True:
             choice = input("1. Chatroom\n2. Signup\n3. Quit\nInput:")
+            choice_msg = ("%04d" %len(choice))+choice
             if choice=="1":
-                client_socket.sendall(bytes("1","utf-8"))
+                client_socket.sendall(bytes(choice_msg,"utf-8"))
                 if login(client_socket):
                     print("Successfully Logged In")
                     break
@@ -158,14 +176,14 @@ if __name__ == "__main__":
                     print("Invalid Username/Password")
                     continue
             elif choice=="2":
-                client_socket.sendall(bytes("2","utf-8"))
+                client_socket.sendall(bytes(choice_msg,"utf-8"))
                 if client_signup(client_socket):
                     print("Successful Registration")
                 else:
                     print("Unsuccessful Registration")
                 continue
             elif choice=="3":
-                client_socket.sendall(bytes("3","utf-8"))
+                client_socket.sendall(bytes(choice_msg,"utf-8"))
                 #trash = client_socket.recv(BUFSIZ)
                 client_socket.close()
                 sys.exit(1)
