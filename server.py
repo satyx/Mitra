@@ -13,8 +13,7 @@ if len(sys.argv)!=3:
 HOST = sys.argv[1]
 PORT = int(sys.argv[2])
 BUFSIZ = 1024
-USERNAME_SIZ = 20
-PASSWORD_SIZ = 64
+
 ADDR = (HOST, PORT)
 
 last_client = None
@@ -36,21 +35,24 @@ def accept_incoming_connections():
     finally:
         return
 
+
 def authentication(client):         # Returns <credentials' validity> <Connected> <Username(=None, when invalid)>
     #broadcast_selective(bytes("Enter Your Username", "utf8"),[client])
     try:
-        username = client.recv(USERNAME_SIZ).decode("utf8")
-        for index in range(len(username)):
-            if username[index]=="#":
-                username = username[:index]
-                break
-        time.sleep(0.5)
-        password = client.recv(PASSWORD_SIZ).decode("utf8")
+
+        username_length = int(client.recv(4).decode("utf8"))
+        username = client.recv(username_length).decode("utf8")
+        #for index in range(len(username)):
+        #    if username[index]=="#":
+        #        username = username[:index]
+        #        break
+        password_length = int(client.recv(4).decode("utf8"))    #Password length is fixed(=64, hashed string) but to maintain uniformity we are accepting it's length
+        password = client.recv(password_length).decode("utf8")
         if not username:
             client.close()
             return False,True,None
         elif username == "<QUIT>":
-            broadcast_selective(bytes("N", "utf8"),[client])
+            broadcast_selective(bytes("N", "utf8"),[client],system=True)
             return False,True,None
            
         print("<%s> is attempting to login" %username)
@@ -59,51 +61,68 @@ def authentication(client):         # Returns <credentials' validity> <Connected
             client.close()
             return False,True,None
         elif password == "<QUIT>":
-            broadcast_selective(bytes("N", "utf8"),[client])
+            broadcast_selective(bytes("N", "utf8"),[client],system=True)
             return False,True,None
         
         if username not in userbase or password != userbase[username]:
-            broadcast_selective(bytes("N", "utf8"),[client])
+            broadcast_selective(bytes("N", "utf8"),[client],system=True)
             print("<%s> Invalid Username/Password" %username)
             return False,True,None
         print("<%s> successfully logged in" %username)
         return True, True, username
     except OSError:
         return None, False, None
+
+
 def client_signup(client):              #Vulnerable. Returns userID,status,connection
+    global userbase
     try:
-        userID = client.recv(USERNAME_SIZ).decode("utf-8")
+        username_length = int(client.recv(4).decode("utf-8"))
+        username = client.recv(username_length).decode("utf-8")
+        
+        password_length = int(client.recv(4).decode("utf-8"))
+        password = client.recv(password_length).decode("utf-8")
     except:
+        print("SignUp Exception Raised")
         return None,False,False
-    for index in range(20):
-        if userID[index]=='#':
-            userID = userID[:index]
-            break
-    
-    password = client.recv(BUFSIZ).decode("utf-8")
-    if userID in userbase:
-        return userID,False,True
+
+    if username in userbase:
+        return username,False,True
     else:
-        userbase[userID] = password
+        userbase[username] = password
         with open("userbase.json","w") as db:
             json.dump(userbase,db)
-        return userID,True,True
+        return username,True,True
+
 
 def handle_client(client,client_address):  # Takes client socket as argument.
     """Handles a single client connection."""
-    global last_client
+    global last_client,clients
 
     try:
         while True:
-            ch = client.recv(BUFSIZ).decode("utf-8")
-            if not ch:
+            choice_length = int(client.recv(4).decode("utf-8"))
+            choice = client.recv(choice_length).decode("utf-8")
+            if not choice:
                 broadcast_selective(bytes("<QUIT>", "utf8"),[client])
                 #client.sendall(bytes("<QUIT>", "utf8"))
                 print("%s:%s has disconnected." % client_address)
                 last_client = None
                 client.close()
                 return
-            if ch=='2':
+            
+            if choice=="1":
+                valid, connected, username = authentication(client)
+                if not connected:
+                    print("%s:%s has disconnected." % client_address)
+                    last_client = None
+                    client.close()
+                    return
+                if valid:
+                    broadcast_selective(bytes("Y","utf-8"),[client],system=True)
+                    break
+
+            if choice=="2":
                 print("<%s> requesting user sign-up" %str(client_address))
                 userID,status,connected = client_signup(client)
                 if not connected:
@@ -113,22 +132,12 @@ def handle_client(client,client_address):  # Takes client socket as argument.
                     return
                 if status:
                     print("User <"+userID+"> has been registered from <"+str(client_address)+">")
-                    broadcast_selective(bytes("Y","utf-8"),[client])
+                    broadcast_selective(bytes("Y","utf-8"),[client],system=True)
                 else:
                     print("User <"+userID+"> has been NOT BEEN registered from <"+str(client_address)+">")
-                    broadcast_selective(bytes("N","utf-8"),[client])
-            if ch=='1':
-                valid, connected, username = authentication(client)
-                if not connected:
-                    print("%s:%s has disconnected." % client_address)
-                    last_client = None
-                    client.close()
-                    return
-                if valid:
-                    broadcast_selective(bytes("Y","utf-8"),[client])
-                    break
-                
-            if ch=='3':
+                    broadcast_selective(bytes("N","utf-8"),[client],system=True)
+
+            if choice=="3":
                 print("%s:%s has disconnected." % client_address)
                 last_client = None
                 client.close()
@@ -138,22 +147,11 @@ def handle_client(client,client_address):  # Takes client socket as argument.
         last_client = None
         client.close()
         return
-    #broadcast_selective(bytes("*****You are now visible to other members of the chatroom*****", "utf8"),[client])
-   # while True:
-        
-        
-        
-   #"""     else:
-   #         broadcast_selective(bytes("<QUIT>", "utf8"),[client])
-   #         #client.sendall(bytes("<QUIT>", "utf8"))
-   #         print("%s:%s has disconnected." % client_address)
-   #         client.close()
-   #         return"""
 
     welcome = 'Welcome ! If you ever want to quit, type <QUIT> to exit.'
-    broadcast_selective(bytes(welcome, "utf8"),[client])
+    broadcast_selective(bytes(welcome, "utf8"),[client],system=True)
     msg = "%s has joined the chat!" % username
-    broadcast_global(bytes(msg, "utf8"),client_address)
+    broadcast_global(bytes(msg, "utf8"),client_address,system=True)
     clients[client] = username
 
     while True:
@@ -161,13 +159,13 @@ def handle_client(client,client_address):  # Takes client socket as argument.
         while True:
             size = int(client.recv(4).decode("utf-8"))
             if not size:
-                broadcast_selective(bytes("<QUIT>", "utf8"),[client])
+                broadcast_selective(bytes("<QUIT>", "utf8"),[client],system=True)
                 client.close()
                 del clients[client]
                 return
             msg_sliced = client.recv(size).decode("utf-8")
             if not msg_sliced:
-                broadcast_selective(bytes("<QUIT>", "utf8"),[client])
+                broadcast_selective(bytes("<QUIT>", "utf8"),[client],system=True)
                 client.close()
                 del clients[client]
                 return
@@ -180,53 +178,75 @@ def handle_client(client,client_address):  # Takes client socket as argument.
         if msg != bytes("<QUIT>", "utf8"):
             broadcast_global(msg,client_address, username+": ")
         else:
-            broadcast_selective(bytes("<QUIT>", "utf8"),[client])
+            broadcast_selective(bytes("<QUIT>", "utf8"),[client],system=True)
             print("%s:%s has disconnected." % client_address)
             last_client = None
             client.close()
             del clients[client]
-            broadcast_global(bytes("%s has left the chat." % username, "utf8"),client_address)
+            broadcast_global(bytes("%s has left the chat." % username, "utf8"),client_address,system=True)
             break
         
 
-
-def broadcast_global(msg,client_address=None, prefix=""):  # prefix is for name identification.
+def broadcast_global(raw_msg,client_address=None, prefix="",system=False):  # prefix is for name identification.
     """Broadcasts a message to all the clients."""
-    invalid_clients=[]
-    global last_client
+    raw_msg = raw_msg.decode("utf-8")  #Temporary
+
+    global last_client,clients
+    invalid_clients={}
+
+    if last_client !=prefix:
+        raw_msg = prefix+raw_msg
+    
     for client in clients:
         try:
-            if last_client !=prefix:
-                client.sendall(bytes(prefix, "utf8")+msg)
+            if system:
+                msg = "<SYSTEM>" + raw_msg
+                msg = ("%04d" %len(msg))+msg
+                client.sendall(bytes(msg, "utf8"))
             else:
-                client.sendall(msg)
+                for index in range(0,len(raw_msg),1024):
+                    msg_slice = raw_msg[index:index+1024]
+                    msg_slice = "<START>" + msg_slice
+                    msg_slice = ("%04d" %len(msg_slice))+msg_slice
+                    client.sendall(bytes(msg_slice, "utf8"))
+                client.sendall(bytes("0005<END>", "utf8"))
+
         except BrokenPipeError:
-            invalid_clients.append(client)
+            invalid_clients[client] = clients[client] 
             continue
     for client in invalid_clients:
         print("%s:%s has disconnected." % client_address)
         last_client = None
         client.close()
         del clients[client]
-        broadcast_global(bytes("%s has left the chat." % name, "utf8"))
+        broadcast_global(bytes("%s has left the chat." % invalid_clients[client], "utf8"),system=True)
     last_client = prefix
 
 
-def broadcast_selective(msg,client_list):
-    global last_client
-    invalid_clients=[]
+def broadcast_selective(raw_msg,client_list,system=False):
+    global last_client,clients
+    raw_msg = raw_msg.decode("utf-8")   #Temporary
+    invalid_clients={}
     for index in range(len(client_list)):
         try:
-            (client_list[index]).sendall(msg)
-        except BrokenPipeError or OSError:
+            if system:
+                msg = "<SYSTEM>"+raw_msg
+                msg = ("%04d" %len(msg))+msg
+                (client_list[index]).sendall(bytes(msg,"utf-8"))
+            else:
+                (client_list[index]).sendall(bytes(raw_msg,"utf-8"))
+        except BrokenPipeError:
             invalid_clients.append(client_list[index])
+            continue
+        except OSError:
+            invalid_clients[client] = clients[client]
             continue
     for client in invalid_clients:
         print("%s has disconnected." %client)
         last_client = None
         client.close()
         del clients[client]
-        broadcast_global(bytes("%s has left the chat." % name, "utf8"))
+        broadcast_global(bytes("%s has left the chat." % invalid_clients[client], "utf8"))
 
 
 if __name__ == "__main__":
@@ -246,7 +266,7 @@ if __name__ == "__main__":
                 SERVER.close()
                 sys.exit(1)
             else:
-                print("<System Message>:Unknown Command")
+                print("<System>:Unknown Command")
         ACCEPT_THREAD.join()
         SERVER.close()
     except KeyboardInterrupt:
