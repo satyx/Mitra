@@ -52,7 +52,7 @@ def authentication(client):         # Returns <credentials' validity> <Connected
             client.close()
             return False,True,None
         elif username == "<QUIT>":
-            broadcast_selective(bytes("N", "utf8"),[client])
+            broadcast_selective(bytes("N", "utf8"),[client],system=True)
             return False,True,None
            
         print("<%s> is attempting to login" %username)
@@ -61,11 +61,11 @@ def authentication(client):         # Returns <credentials' validity> <Connected
             client.close()
             return False,True,None
         elif password == "<QUIT>":
-            broadcast_selective(bytes("N", "utf8"),[client])
+            broadcast_selective(bytes("N", "utf8"),[client],system=True)
             return False,True,None
         
         if username not in userbase or password != userbase[username]:
-            broadcast_selective(bytes("N", "utf8"),[client])
+            broadcast_selective(bytes("N", "utf8"),[client],system=True)
             print("<%s> Invalid Username/Password" %username)
             return False,True,None
         print("<%s> successfully logged in" %username)
@@ -86,13 +86,13 @@ def client_signup(client):              #Vulnerable. Returns userID,status,conne
         print("SignUp Exception Raised")
         return None,False,False
 
-    if userID in userbase:
-        return userID,False,True
+    if username in userbase:
+        return username,False,True
     else:
-        userbase[userID] = password
+        userbase[username] = password
         with open("userbase.json","w") as db:
             json.dump(userbase,db)
-        return userID,True,True
+        return username,True,True
 
 
 def handle_client(client,client_address):  # Takes client socket as argument.
@@ -119,7 +119,7 @@ def handle_client(client,client_address):  # Takes client socket as argument.
                     client.close()
                     return
                 if valid:
-                    broadcast_selective(bytes("Y","utf-8"),[client])
+                    broadcast_selective(bytes("Y","utf-8"),[client],system=True)
                     break
 
             if choice=="2":
@@ -132,10 +132,10 @@ def handle_client(client,client_address):  # Takes client socket as argument.
                     return
                 if status:
                     print("User <"+userID+"> has been registered from <"+str(client_address)+">")
-                    broadcast_selective(bytes("Y","utf-8"),[client])
+                    broadcast_selective(bytes("Y","utf-8"),[client],system=True)
                 else:
                     print("User <"+userID+"> has been NOT BEEN registered from <"+str(client_address)+">")
-                    broadcast_selective(bytes("N","utf-8"),[client])
+                    broadcast_selective(bytes("N","utf-8"),[client],system=True)
 
             if choice=="3":
                 print("%s:%s has disconnected." % client_address)
@@ -210,12 +210,18 @@ def broadcast_global(msg,client_address=None, prefix=""):  # prefix is for name 
     last_client = prefix
 
 
-def broadcast_selective(msg,client_list):
+def broadcast_selective(raw_msg,client_list,system=False):
     global last_client,clients
+    raw_msg = raw_msg.decode("utf-8")   #Temporary
     invalid_clients={}
     for index in range(len(client_list)):
         try:
-            (client_list[index]).sendall(msg)
+            if system:
+                msg = "<SYSTEM>"+raw_msg
+                msg = ("%04d" %len(msg))+msg
+                (client_list[index]).sendall(bytes(msg,"utf-8"))
+            else:
+                (client_list[index]).sendall(bytes(raw_msg,"utf-8"))
         except BrokenPipeError:
             invalid_clients.append(client_list[index])
             continue

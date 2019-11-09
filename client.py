@@ -97,8 +97,9 @@ def client_signup(client):
         hashpassword = ("%04d" %len(hashpassword))+hashpassword
         client.sendall(bytes(hashpassword,"utf-8"))
 
-        status = client.recv(BUFSIZ).decode("utf-8")
-        if not status:
+        status_length = int(client.recv(4).decode("utf-8"))
+        status = client.recv(status_length).decode("utf-8")
+        if not status or status[:8] != "<SYSTEM>":
             client.close()
             sys.exit(1)
     except ConnectionError:
@@ -106,7 +107,7 @@ def client_signup(client):
         client.close()
         sys.exit(1)
     
-    if status=='Y':
+    if status[8:]=='Y':
         return True
     else:
         return False
@@ -127,14 +128,20 @@ def login(client):
     try:
         client.sendall(bytes(username,"utf-8"))
         client.sendall(bytes(hashed_password,"utf-8"))
-        status = client.recv(1).decode("utf-8")
+
+        status_length = int(client.recv(4).decode("utf-8"))
+        status = client.recv(status_length).decode("utf-8")
+        print(status)
+        if not status or status[:8] != "<SYSTEM>":
+            client.close()
+            sys.exit(1)
 
     except:
         print("Exception Raised at login()")
         client.close()
         sys.exit(1)
 
-    if status == "Y":
+    if status[8:] == "Y":
         return True
     else:
         return False
