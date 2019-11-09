@@ -149,9 +149,9 @@ def handle_client(client,client_address):  # Takes client socket as argument.
         return
 
     welcome = 'Welcome ! If you ever want to quit, type <QUIT> to exit.'
-    broadcast_selective(bytes(welcome, "utf8"),[client])
+    broadcast_selective(bytes(welcome, "utf8"),[client],system=True)
     msg = "%s has joined the chat!" % username
-    broadcast_global(bytes(msg, "utf8"),client_address)
+    broadcast_global(bytes(msg, "utf8"),client_address,system=True)
     clients[client] = username
 
     while True:
@@ -159,13 +159,13 @@ def handle_client(client,client_address):  # Takes client socket as argument.
         while True:
             size = int(client.recv(4).decode("utf-8"))
             if not size:
-                broadcast_selective(bytes("<QUIT>", "utf8"),[client])
+                broadcast_selective(bytes("<QUIT>", "utf8"),[client],system=True)
                 client.close()
                 del clients[client]
                 return
             msg_sliced = client.recv(size).decode("utf-8")
             if not msg_sliced:
-                broadcast_selective(bytes("<QUIT>", "utf8"),[client])
+                broadcast_selective(bytes("<QUIT>", "utf8"),[client],system=True)
                 client.close()
                 del clients[client]
                 return
@@ -178,26 +178,39 @@ def handle_client(client,client_address):  # Takes client socket as argument.
         if msg != bytes("<QUIT>", "utf8"):
             broadcast_global(msg,client_address, username+": ")
         else:
-            broadcast_selective(bytes("<QUIT>", "utf8"),[client])
+            broadcast_selective(bytes("<QUIT>", "utf8"),[client],system=True)
             print("%s:%s has disconnected." % client_address)
             last_client = None
             client.close()
             del clients[client]
-            broadcast_global(bytes("%s has left the chat." % username, "utf8"),client_address)
+            broadcast_global(bytes("%s has left the chat." % username, "utf8"),client_address,system=True)
             break
         
 
-def broadcast_global(msg,client_address=None, prefix=""):  # prefix is for name identification.
+def broadcast_global(raw_msg,client_address=None, prefix="",system=False):  # prefix is for name identification.
     """Broadcasts a message to all the clients."""
+    raw_msg = raw_msg.decode("utf-8")  #Temporary
+
     global last_client,clients
     invalid_clients={}
 
+    if last_client !=prefix:
+        raw_msg = prefix+raw_msg
+    
     for client in clients:
         try:
-            if last_client !=prefix:
-                client.sendall(bytes(prefix, "utf8")+msg)
+            if system:
+                msg = "<SYSTEM>" + raw_msg
+                msg = ("%04d" %len(msg))+msg
+                client.sendall(bytes(msg, "utf8"))
             else:
-                client.sendall(msg)
+                for index in range(0,len(raw_msg),1024):
+                    msg_slice = raw_msg[index:index+1024]
+                    msg_slice = "<START>" + msg_slice
+                    msg_slice = ("%04d" %len(msg_slice))+msg_slice
+                    client.sendall(bytes(msg_slice, "utf8"))
+                client.sendall(bytes("0005<END>", "utf8"))
+
         except BrokenPipeError:
             invalid_clients[client] = clients[client] 
             continue
@@ -206,7 +219,7 @@ def broadcast_global(msg,client_address=None, prefix=""):  # prefix is for name 
         last_client = None
         client.close()
         del clients[client]
-        broadcast_global(bytes("%s has left the chat." % invalid_clients[client], "utf8"))
+        broadcast_global(bytes("%s has left the chat." % invalid_clients[client], "utf8"),system=True)
     last_client = prefix
 
 
@@ -253,7 +266,7 @@ if __name__ == "__main__":
                 SERVER.close()
                 sys.exit(1)
             else:
-                print("<System Message>:Unknown Command")
+                print("<System>:Unknown Command")
         ACCEPT_THREAD.join()
         SERVER.close()
     except KeyboardInterrupt:

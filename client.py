@@ -6,29 +6,44 @@ import time
 import hashlib
 import getpass
 
+def system_instruction(msg,client_socket):
+    if msg=="<QUIT>":
+        client_socket.close()
+        top.quit()
+        sys.exit(1)
+    else:
+        msg_list.insert(tkinter.END, msg)
 
 def receive():
     """Handles receiving of messages."""
     while True:
-        #print(4)
+        msg = ""
+        system_flag = False
         try:
-            msg = client_socket.recv(BUFSIZ).decode("utf8")
-            #client_socket.settimeout(None)            
-            if not msg or msg=="<QUIT>":
-                client_socket.close()
-                top.quit()
-                break
-            elif msg == "Invalid Username":
-                client_socket.close()
-                top.quit()
-                print("Invalid Username. Closing Connection......")
-                break
-                
-            else:
-                msg_list.insert(tkinter.END, msg)
+            while True:
+                msg_length = int(client_socket.recv(4).decode("utf-8"))
+                msg_slice = client_socket.recv(msg_length).decode("utf-8")
+                if not msg_slice or msg_slice=="<QUIT>":
+                    client_socket.close()
+                    top.quit()
+                    break
+
+                if msg_slice[:8]=="<SYSTEM>":
+                    msg+=msg_slice[8:]
+                    system_flag = True
+                    break
+                elif msg_length == 5 and msg_slice=="<END>":
+                    break
+                else:
+                    msg += msg_slice[7:]
         except OSError:  # Possibly client has left the chat.
-            #print(8)
             break
+
+        if system_flag:
+            system_instruction(msg,client_socket)
+        else:
+            msg_list.insert(tkinter.END, msg)
+
 
 
 def send(event=None):  # event is passed by binders.
@@ -45,11 +60,9 @@ def send(event=None):  # event is passed by binders.
             client_socket.sendall(bytes(msg_slice, "utf8"))
         client_socket.sendall(bytes("0005<END>", "utf8"))
         if len(msg)==10 and msg[4:] == "<QUIT>":
-            #print(6)
             client_socket.close()
             top.quit()
     except KeyboardInterrupt:
-        #print(2)
         print("Caught Keyboard interrupt.Exitting")
         client_socket.close()
         top.quit()
@@ -63,7 +76,6 @@ def send(event=None):  # event is passed by binders.
 
 def on_closing(event=None):
     """This function is to be called when the window is closed."""
-    #print(7)
     my_msg.set("<QUIT>")
     send()
 
@@ -131,7 +143,6 @@ def login(client):
 
         status_length = int(client.recv(4).decode("utf-8"))
         status = client.recv(status_length).decode("utf-8")
-        print(status)
         if not status or status[:8] != "<SYSTEM>":
             client.close()
             sys.exit(1)
