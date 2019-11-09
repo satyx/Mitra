@@ -176,7 +176,7 @@ def handle_client(client,client_address):  # Takes client socket as argument.
         msg = bytes(msg,"utf-8")
         
         if msg != bytes("<QUIT>", "utf8"):
-            broadcast_global(msg,client_address, username+": ")
+            broadcast_global(msg,client_address, "["+username+"]: ")
         else:
             broadcast_selective(bytes("<QUIT>", "utf8"),[client],system=True)
             print("%s:%s has disconnected." % client_address)

@@ -42,7 +42,13 @@ def receive():
         if system_flag:
             system_instruction(msg,client_socket)
         else:
-            msg_list.insert(tkinter.END, msg)
+            for index in range(0,len(msg),50):
+                msg_slice = msg[index:index+50]
+                if len(msg_slice)==50 and len(msg)-index>50 and msg[index+50]!=" " and msg[index+49]!=" ":
+                    msg_slice+="-"
+                msg_list.insert(tkinter.END, msg_slice)
+                
+
 
 
 
