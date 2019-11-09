@@ -205,6 +205,12 @@ def broadcast_global(raw_msg,client_address=None, prefix="",system=False):  # pr
     if last_client !=prefix:
         raw_msg = prefix+raw_msg
     
+    if system:
+        chatfile.write("<SYSTEM>"+raw_msg+"\n")
+    else:
+        chatfile.write("<USER>"+raw_msg+"\n")
+
+
     for client in clients:
         try:
             if system:
@@ -268,6 +274,7 @@ if __name__ == "__main__":
         SERVER.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)        #To override, if the given address is already in use
         SERVER.bind(ADDR)
         SERVER.listen(5)
+        chatfile = open("chat_backup.txt","a")
         print("Waiting for connection...")
         ACCEPT_THREAD = Thread(target=accept_incoming_connections,daemon=True) #Stop execution of ACCEPT_THREAD as soon as server terminates
         print("-----Enter <QUIT> to exit-----")
@@ -275,17 +282,26 @@ if __name__ == "__main__":
         while True:
             z = input()
             if z == "<QUIT>":
-                print("Closing Server. Exitting....")
+                print("<SYSTEM>:Closing Server. Exitting....")
+                broadcast_global(bytes("<QUIT>","utf-8"),system=True)
+                chatfile.close()
                 SERVER.close()
                 sys.exit(1)
-            if z == "<Active Users>":
-                print(user_client)
+            elif z == "<ACTIVE USERS>":
+                print("<SYSTEM>:"+repr(user_client.keys()))
+            elif z == "<DELETE CHAT BACKUP>":
+                if len(user_client)==0:
+                    chatfile.truncate(0)
+                    print("<SYSTEM>:Data Cleared Successfully")
+                else:
+                    print("<SYSTEM>:Chatroom Currently Active")
             else:
                 print("<System>:Unknown Command")
         ACCEPT_THREAD.join()
         SERVER.close()
     except KeyboardInterrupt:
-        print("Caught Keyboard Interrupt")
+        print("<SYSTEM>:Caught Keyboard Interrupt")
+        chatfile.close()
         for client in clients:
             client.sendall(bytes("*****Server Disconnected*******", "utf8"))
             client.sendall(bytes("<QUIT>", "utf8"))
