@@ -20,6 +20,9 @@ last_client = None
 
 clients = {}
 addresses = {}
+user_client = {}
+
+
 
 
 def accept_incoming_connections():
@@ -97,7 +100,7 @@ def client_signup(client):              #Vulnerable. Returns userID,status,conne
 
 def handle_client(client,client_address):  # Takes client socket as argument.
     """Handles a single client connection."""
-    global last_client,clients
+    global last_client,clients,user_client
 
     try:
         while True:
@@ -153,6 +156,7 @@ def handle_client(client,client_address):  # Takes client socket as argument.
     msg = "%s has joined the chat!" % username
     broadcast_global(bytes(msg, "utf8"),client_address,system=True)
     clients[client] = username
+    user_client[username] = client
 
     while True:
         msg = ""
@@ -161,12 +165,14 @@ def handle_client(client,client_address):  # Takes client socket as argument.
             if not size:
                 broadcast_selective(bytes("<QUIT>", "utf8"),[client],system=True)
                 client.close()
+                del user_client[clients[client]]
                 del clients[client]
                 return
             msg_sliced = client.recv(size).decode("utf-8")
             if not msg_sliced:
                 broadcast_selective(bytes("<QUIT>", "utf8"),[client],system=True)
                 client.close()
+                del user_client[clients[client]]
                 del clients[client]
                 return
             
@@ -179,9 +185,11 @@ def handle_client(client,client_address):  # Takes client socket as argument.
             broadcast_global(msg,client_address, "["+username+"]: ")
         else:
             broadcast_selective(bytes("<QUIT>", "utf8"),[client],system=True)
-            print("%s:%s has disconnected." % client_address)
             last_client = None
             client.close()
+            print("<%s> successfully logged out" %(clients[client]))
+            print("%s:%s has disconnected." % client_address)
+            del user_client[clients[client]]
             del clients[client]
             broadcast_global(bytes("%s has left the chat." % username, "utf8"),client_address,system=True)
             break
@@ -191,7 +199,7 @@ def broadcast_global(raw_msg,client_address=None, prefix="",system=False):  # pr
     """Broadcasts a message to all the clients."""
     raw_msg = raw_msg.decode("utf-8")  #Temporary
 
-    global last_client,clients
+    global last_client,clients,user_client
     invalid_clients={}
 
     if last_client !=prefix:
@@ -218,13 +226,16 @@ def broadcast_global(raw_msg,client_address=None, prefix="",system=False):  # pr
         print("%s:%s has disconnected." % client_address)
         last_client = None
         client.close()
+        print("<%s> successfully logged out" %(clients[client]))
+        print("%s:%s has disconnected." % client_address)            
+        del user_client[clients[client]]
         del clients[client]
         broadcast_global(bytes("%s has left the chat." % invalid_clients[client], "utf8"),system=True)
     last_client = prefix
 
 
 def broadcast_selective(raw_msg,client_list,system=False):
-    global last_client,clients
+    global last_client,clients,user_client
     raw_msg = raw_msg.decode("utf-8")   #Temporary
     invalid_clients={}
     for index in range(len(client_list)):
@@ -242,9 +253,11 @@ def broadcast_selective(raw_msg,client_list,system=False):
             invalid_clients[client] = clients[client]
             continue
     for client in invalid_clients:
-        print("%s has disconnected." %client)
         last_client = None
         client.close()
+        print("<%s> successfully logged out" %(clients[client]))
+        print("%s:%s has disconnected." % client_address)
+        del user_client[clients[client]]
         del clients[client]
         broadcast_global(bytes("%s has left the chat." % invalid_clients[client], "utf8"))
 
@@ -265,6 +278,8 @@ if __name__ == "__main__":
                 print("Closing Server. Exitting....")
                 SERVER.close()
                 sys.exit(1)
+            if z == "<Active Users>":
+                print(user_client)
             else:
                 print("<System>:Unknown Command")
         ACCEPT_THREAD.join()
