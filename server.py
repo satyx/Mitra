@@ -150,8 +150,8 @@ def handle_client(client,client_address):  # Takes client socket as argument.
         last_client = None
         client.close()
         return
-
-    welcome = 'Welcome ! If you ever want to quit, type <QUIT> to exit.'
+    update_upon_login(client)
+    welcome = '****Welcome ! If you ever want to quit, type <QUIT> to Exit****'
     broadcast_selective(bytes(welcome, "utf8"),[client],system=True)
     msg = "%s has joined the chat!" % username
     broadcast_global(bytes(msg, "utf8"),client_address,system=True)
@@ -205,10 +205,12 @@ def broadcast_global(raw_msg,client_address=None, prefix="",system=False):  # pr
     if last_client !=prefix:
         raw_msg = prefix+raw_msg
     
-    if system:
-        chatfile.write("<SYSTEM>"+raw_msg+"\n")
-    else:
-        chatfile.write("<USER>"+raw_msg+"\n")
+    if raw_msg!="<QUIT>":
+        with open("chat_backup.txt","a") as chatfile:
+            if system:
+                chatfile.write("<0000>"+raw_msg+"\n") #0000 corresponds to system's message
+            else:
+                chatfile.write("<0001>"+raw_msg+"\n")   #0001 corresponds to system's message
 
 
     for client in clients:
@@ -267,6 +269,19 @@ def broadcast_selective(raw_msg,client_list,system=False):
         del clients[client]
         broadcast_global(bytes("%s has left the chat." % invalid_clients[client], "utf8"))
 
+def update_upon_login(client):
+    with open(r"chat_backup.txt","r") as chat_backup:
+        lines = chat_backup.read().splitlines()   #For safety max. number of bytes are mentioned
+        for line in lines:
+            modified_line = "<SYSTEM>"+line[6:-1]
+            modified_line = ("%04d" %len(modified_line))+modified_line
+            client.sendall(bytes(modified_line,"utf-8"))
+    return
+
+
+
+
+
 
 if __name__ == "__main__":
     try:
@@ -274,7 +289,6 @@ if __name__ == "__main__":
         SERVER.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)        #To override, if the given address is already in use
         SERVER.bind(ADDR)
         SERVER.listen(5)
-        chatfile = open("chat_backup.txt","a")
         print("Waiting for connection...")
         ACCEPT_THREAD = Thread(target=accept_incoming_connections,daemon=True) #Stop execution of ACCEPT_THREAD as soon as server terminates
         print("-----Enter <QUIT> to exit-----")
@@ -284,14 +298,13 @@ if __name__ == "__main__":
             if z == "<QUIT>":
                 print("<SYSTEM>:Closing Server. Exitting....")
                 broadcast_global(bytes("<QUIT>","utf-8"),system=True)
-                chatfile.close()
                 SERVER.close()
                 sys.exit(1)
             elif z == "<ACTIVE USERS>":
                 print("<SYSTEM>:"+repr(user_client.keys()))
             elif z == "<DELETE CHAT BACKUP>":
                 if len(user_client)==0:
-                    chatfile.truncate(0)
+                    open("chat_backup.txt","w").close()
                     print("<SYSTEM>:Data Cleared Successfully")
                 else:
                     print("<SYSTEM>:Chatroom Currently Active")
@@ -301,7 +314,6 @@ if __name__ == "__main__":
         SERVER.close()
     except KeyboardInterrupt:
         print("<SYSTEM>:Caught Keyboard Interrupt")
-        chatfile.close()
         for client in clients:
             client.sendall(bytes("*****Server Disconnected*******", "utf8"))
             client.sendall(bytes("<QUIT>", "utf8"))
