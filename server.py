@@ -19,6 +19,13 @@ ADDR = (HOST, PORT)
 
 last_client = None
 
+
+#flags
+invalid = 0
+valid = 1
+already_logged_in =2
+
+
 clients = {}
 addresses = {}
 user_client = {}
@@ -61,11 +68,11 @@ def authentication(client,client_address):         # Returns <credentials' valid
         if not username:
             logging("<LOGIN>:Invalid Username <%s>. Authetication Failed!"%(username))
             client.close()
-            return False,True,None
+            return invalid,True,None
         elif username == "<QUIT>":
             logging("<LOGIN>:Invalid Username <%s>. Authetication Failed!"%(username))
             broadcast_selective(bytes("N", "utf8"),[client],system=True)
-            return False,True,None
+            return invalid,True,None
         
         response = "<LOGIN>:<%s> is attempting to login" %username
         logging(response)
@@ -74,21 +81,28 @@ def authentication(client,client_address):         # Returns <credentials' valid
         if not password:
             logging("<LOGIN>:Invalid Password for the user <%s>. Authentication Failed!"%(username))
             client.close()
-            return False,True,None
+            return invalid,True,None
         elif password == "<QUIT>":
             logging("<LOGIN>:Invalid Password for the user <%s>. Authentication Failed!"%(username))
             broadcast_selective(bytes("N", "utf8"),[client],system=True)
-            return False,True,None
+            return invalid,True,None
         
         if username not in userbase or password != userbase[username]:
             response = "<LOGIN>:Invalid Password for the user <%s>. Authentication Failed!"%(username)
             logging(response)
             broadcast_selective(bytes("N", "utf8"),[client],system=True)
             print(response)
-            return False,True,None
+            return invalid,True,None
         
+        if username in user_client:
+            response = "<LOGIN>:Attempt for multiple login for user <"+username+"> from client address (%s:%s). Authentication Failed!"%(client_address)
+            logging(response)
+            print(response)
+            broadcast_selective(bytes("N", "utf8"),[client],system=True)
+            return already_logged_in,True,None
+
         #Logging for successful authentification at caller function
-        return True, True, username
+        return valid, True, username
     except OSError:
         response = "<LOGIN>:OSError Caught at <%s:%s>" %(client_address)
         logging(response)
@@ -140,7 +154,7 @@ def handle_client(client,client_address):  # Takes client socket as argument.
                 response = "<QUERY>:Login Request by <%s:%s>" %client_address
                 logging(response)
                 print(response)
-                valid, connected, username = authentication(client,client_address)
+                status, connected, username = authentication(client,client_address)
                 if not connected:
                     response = "%s:%s has disconnected." % client_address
                     logging(response)
@@ -148,7 +162,7 @@ def handle_client(client,client_address):  # Takes client socket as argument.
                     last_client = None
                     client.close()
                     return
-                if valid:
+                if status == valid:
                     response = "<LOGIN>:<%s> successfully logged in" %username
                     logging(response)
                     print(response)
