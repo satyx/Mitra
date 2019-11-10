@@ -228,41 +228,55 @@ def handle_client(client,client_address):  # Takes client socket as argument.
     broadcast_global(bytes(msg, "utf8"),client_address,system=True)
     
 
-    while True:
-        msg = ""
+    try:
         while True:
-            size = int(client.recv(4).decode("utf-8"))
-            if not size:
-                broadcast_selective(bytes("<QUIT>", "utf8"),[client],system=True)
-                client.close()
-                del user_client[clients[client]]
-                del clients[client]
-                return
-            msg_sliced = client.recv(size).decode("utf-8")
-            if not msg_sliced:
-                broadcast_selective(bytes("<QUIT>", "utf8"),[client],system=True)
-                client.close()
-                del user_client[clients[client]]
-                del clients[client]
-                return
+            msg = ""
+            while True:
+                size = int(client.recv(4).decode("utf-8"))
+                if not size:
+                    broadcast_selective(bytes("<QUIT>", "utf8"),[client],system=True)
+                    client.close()
+                    del user_client[clients[client]]
+                    del clients[client]
+                    return
+                msg_sliced = client.recv(size).decode("utf-8")
+                if not msg_sliced:
+                    broadcast_selective(bytes("<QUIT>", "utf8"),[client],system=True)
+                    client.close()
+                    del user_client[clients[client]]
+                    del clients[client]
+                    return
+                
+                if size==5 and msg_sliced=="<END>" and msg_sliced[:7] != "<START>":
+                    break
+                msg+=msg_sliced[7:]
+            msg = bytes(msg,"utf-8")
             
-            if size==5 and msg_sliced=="<END>" and msg_sliced[:7] != "<START>":
+            if msg != bytes("<QUIT>", "utf8"):
+                broadcast_global(msg,client_address, "["+username+"]: ")
+            else:
+                broadcast_selective(bytes("<QUIT>", "utf8"),[client],system=True)
+                last_client = None
+                client.close()
+                print("<%s> successfully logged out" %(clients[client]))
+                print("%s:%s has disconnected." %(client_address))
+                del user_client[clients[client]]
+                del clients[client]
+                broadcast_global(bytes("%s has left the chat." % username, "utf8"),client_address,system=True)
                 break
-            msg+=msg_sliced[7:]
-        msg = bytes(msg,"utf-8")
-        
-        if msg != bytes("<QUIT>", "utf8"):
-            broadcast_global(msg,client_address, "["+username+"]: ")
-        else:
-            broadcast_selective(bytes("<QUIT>", "utf8"),[client],system=True)
-            last_client = None
-            client.close()
-            print("<%s> successfully logged out" %(clients[client]))
-            print("%s:%s has disconnected." % client_address)
-            del user_client[clients[client]]
-            del clients[client]
-            broadcast_global(bytes("%s has left the chat." % username, "utf8"),client_address,system=True)
-            break
+    except:
+        response = "Exception Raised while listening to client (%s:%s)" %(client_address)
+        logging(response)
+        print(response)
+
+        response = "%s:%s has disconnected." %client_address
+        logging(response)
+        print(response)
+
+        client.close()
+        del user_client[clients[client]]
+        del clients[client]
+        return
         
 
 def broadcast_global(raw_msg,client_address=None, prefix="",system=False):  # prefix is for name identification.
@@ -433,6 +447,7 @@ if __name__ == "__main__":
         response = "<SYSTEM>:Caught Keyboard Interrupt"
         logging(response)
         print(response)
+        print(clients.keys())
         for client in clients:
             response = "*****Server Disconnected*****"
             logging(response)
