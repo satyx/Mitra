@@ -84,13 +84,13 @@ def authentication(client,client_address):         # Returns <credentials' valid
             return invalid,True,None
         elif password == "<QUIT>":
             logging("<LOGIN>:Invalid Password for the user <%s>. Authentication Failed!"%(username))
-            broadcast_selective(bytes("N", "utf8"),[client],system=True)
+            broadcast_selective(bytes("N-I", "utf8"),[client],system=True)
             return invalid,True,None
         
         if username not in userbase or password != userbase[username]:
             response = "<LOGIN>:Invalid Password for the user <%s>. Authentication Failed!"%(username)
             logging(response)
-            broadcast_selective(bytes("N", "utf8"),[client],system=True)
+            broadcast_selective(bytes("N-I", "utf8"),[client],system=True)
             print(response)
             return invalid,True,None
         
@@ -98,7 +98,7 @@ def authentication(client,client_address):         # Returns <credentials' valid
             response = "<LOGIN>:Attempt for multiple login for user <"+username+"> from client address (%s:%s). Authentication Failed!"%(client_address)
             logging(response)
             print(response)
-            broadcast_selective(bytes("N", "utf8"),[client],system=True)
+            broadcast_selective(bytes("N-A", "utf8"),[client],system=True)
             return already_logged_in,True,None
 
         #Logging for successful authentification at caller function
@@ -447,13 +447,10 @@ if __name__ == "__main__":
         response = "<SYSTEM>:Caught Keyboard Interrupt"
         logging(response)
         print(response)
-        print(clients.keys())
+        
         for client in clients:
             response = "*****Server Disconnected*****"
             logging(response)
-            server_disconnect = bytes("*****Server Disconnected*****","utf-8")
-            broadcast_global(server_disconnect)
-            #client.sendall(bytes("*****Server Disconnected*****", "utf8"))
             broadcast_global(bytes("<QUIT>", "utf8"),system=True)
             #client.sendall(bytes("<QUIT>", "utf8"))
             

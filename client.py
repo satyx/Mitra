@@ -134,20 +134,20 @@ def client_signup(client):
     
 def login(client):
     #prompt = client.recv(1024).decode("utf-8")
-    raw_username = input("Username:")
-    raw_password = getpass.getpass("Password:")
+    username = input("Username:")
+    password = getpass.getpass("Password:")
 
-    if len(raw_username)>20 or len(raw_password)>32:
+    if len(username)>20 or len(password)>32:
         return False
 
 
-    username = ("%04d" %len(raw_username))+raw_username
-    raw_hashed_password = hashlib.sha256(raw_password.encode()).hexdigest()
-    hashed_password = ("%04d" %len(raw_hashed_password))+raw_hashed_password
+    padded_username = ("%04d" %len(username))+username
+    raw_hashed_password = hashlib.sha256(password.encode()).hexdigest()
+    padded_hashed_password = ("%04d" %len(raw_hashed_password))+raw_hashed_password
 
     try:
-        client.sendall(bytes(username,"utf-8"))
-        client.sendall(bytes(hashed_password,"utf-8"))
+        client.sendall(bytes(padded_username,"utf-8"))
+        client.sendall(bytes(padded_hashed_password,"utf-8"))
 
         status_length = int(client.recv(4).decode("utf-8"))
         status = client.recv(status_length).decode("utf-8")
@@ -160,9 +160,14 @@ def login(client):
         client.close()
         sys.exit(1)
 
-    if status[8:] == "Y":
+    if status[8:9] == "Y":
+        print("Successfully Logged In")
         return True
+    elif status[8:9]=="N" and status[10:11]=="A":
+        print("<%s> is currently logged in through another client. Disconnect it first to Login" %username)
+        return False
     else:
+        print("Invalid Username/Password")
         return False
 
 
@@ -196,10 +201,8 @@ if __name__ == "__main__":
             if choice=="1":
                 client_socket.sendall(bytes(choice_msg,"utf-8"))
                 if login(client_socket):
-                    print("Successfully Logged In")
                     break
                 else:
-                    print("Invalid Username/Password")
                     continue
             elif choice=="2":
                 client_socket.sendall(bytes(choice_msg,"utf-8"))
