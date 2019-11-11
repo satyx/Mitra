@@ -12,7 +12,8 @@ def system_instruction(msg,client_socket):
         top.quit()
         sys.exit(1)
     else:
-        msg_list.insert(tkinter.END, msg)
+        timestamp,msg = msg[-7:],msg[:-7]
+        msg_list.insert(tkinter.END, msg+" "+timestamp)
 
 def receive():
     """Handles receiving of messages."""
@@ -42,10 +43,15 @@ def receive():
         if system_flag:
             system_instruction(msg,client_socket)
         else:
-            for index in range(0,len(msg),50):
-                msg_slice = msg[index:index+50]
-                if len(msg_slice)==50 and len(msg)-index>50 and msg[index+50]!=" " and msg[index+49]!=" ":
+            timestamp = msg[-7:]
+            msg = msg[:-7]
+            for index in range(0,len(msg),48):
+                msg_slice = msg[index:index+48]
+                
+                if len(msg_slice)==48 and len(msg)-index>48 and msg[index+48]!=" " and msg[index+47]!=" ":
                     msg_slice+="-"
+                if index==0:
+                    msg_slice = msg_slice+" "+timestamp
                 msg_list.insert(tkinter.END, msg_slice)
                 
 
@@ -82,10 +88,12 @@ def send(event=None):  # event is passed by binders.
 
 def on_closing(event=None):
     """This function is to be called when the window is closed."""
-    my_msg.set("<QUIT>")
-    send()
-    top.quit()
-
+    try:
+        my_msg.set("<QUIT>")
+        send()
+        top.quit()
+    except:
+        print("Exception Raised while closing")
 def client_signup(client):
 
     #For UI
@@ -181,7 +189,6 @@ def Interact_Terminal(top,socket):
             send()
             socket.close()
             top.quit()
-            print("Successfully logged out")
             return
         else:
             print("<SYSTEM>:Unknown Command")
@@ -267,8 +274,9 @@ if __name__ == "__main__":
             tkinter.mainloop()  # Starts GUI execution.
             stop_threads = True
             top.after(1,top.destroy)
-            
             interaction_thread.join()
+            print("Successfully Logged Out")
+            
         except KeyboardInterrupt:
             #print(2)
             print("Caught Keyboard interrupt.Exitting")

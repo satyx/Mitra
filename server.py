@@ -4,7 +4,7 @@ import sys
 import time
 import json
 import datetime
-with open("userbase.json") as db:
+with open("database/userbase.json") as db:
     userbase = json.load(db)
 
 if len(sys.argv)!=3:
@@ -133,7 +133,7 @@ def client_signup(client,client_address):              #Vulnerable. Returns user
         return username,False,True
     else:
         userbase[username] = password
-        with open("userbase.json","w") as db:
+        with open("database/userbase.json","w") as db:
             json.dump(userbase,db)
         #logging done by caller    
         return username,True,True
@@ -221,6 +221,8 @@ def handle_client(client,client_address):  # Takes client socket as argument.
     
     clients[client] = username
     user_client[username] = client
+    
+
     update_upon_login(client)
     welcome = '****Welcome ! If you ever want to quit, type <QUIT> to Exit****'
     broadcast_selective(bytes(welcome, "utf8"),[client],system=True)
@@ -277,7 +279,7 @@ def handle_client(client,client_address):  # Takes client socket as argument.
         del user_client[clients[client]]
         del clients[client]
         return
-        
+
 
 def broadcast_global(raw_msg,client_address=None, prefix="",system=False):  # prefix is for name identification.
     """Broadcasts a message to all the clients."""
@@ -289,14 +291,17 @@ def broadcast_global(raw_msg,client_address=None, prefix="",system=False):  # pr
     if last_client !=prefix:
         raw_msg = prefix+raw_msg
     
-    if raw_msg!="<QUIT>":
-        with open("chat_backup.txt","a") as chatfile:
-            if system:
-                logging("<BROADCAST> By Server")
-                chatfile.write("<0000>"+raw_msg+"\n") #0000 corresponds to system's message
-            else:
-                logging("<BROADCAST> By User")
-                chatfile.write("<0001>"+raw_msg+"\n")   #0001 corresponds to system's message
+    timestamp = "["+str(datetime.datetime.now().time())[:5]+"]"
+    raw_msg = raw_msg+timestamp
+    if raw_msg[:-7]!="<QUIT>":
+        if system:
+            logging("<BROADCAST> By Server")
+            chat_backup("<0000>"+raw_msg)
+            #chatfile.write("<0000>"+raw_msg+"\n") #0000 corresponds to system's message
+        else:
+            logging("<BROADCAST> By User")
+            chat_backup("<0001>"+raw_msg)
+            #chatfile.write("<0001>"+raw_msg+"\n")   #0001 corresponds to system's message
 
 
     for client in clients:
@@ -308,6 +313,7 @@ def broadcast_global(raw_msg,client_address=None, prefix="",system=False):  # pr
             else:
                 for index in range(0,len(raw_msg),1024):
                     msg_slice = raw_msg[index:index+1024]
+                    #msg_slice = pad_msg(msg_slice,timestamp)
                     msg_slice = "<START>" + msg_slice
                     msg_slice = ("%04d" %len(msg_slice))+msg_slice
                     client.sendall(bytes(msg_slice, "utf8"))
@@ -351,7 +357,15 @@ def broadcast_selective(raw_msg,client_list,system=False):
                 msg = ("%04d" %len(msg))+msg
                 (client_list[index]).sendall(bytes(msg,"utf-8"))
             else:
-                (client_list[index]).sendall(bytes(raw_msg,"utf-8"))
+                for index in range(0,len(raw_msg),1024):
+                    msg_slice = raw_msg[index:index+1024]
+                    #msg_slice = pad_msg(msg_slice,timestamp)
+                    msg_slice = "<START>" + msg_slice
+                    msg_slice = ("%04d" %len(msg_slice))+msg_slice
+                    (client_list[index]).sendall(bytes(msg_slice, "utf8"))
+                
+                #(client_list[index]).sendall(bytes(raw_msg,"utf-8"))
+                (client_list[index]).sendall(bytes("0005<END>", "utf8"))
         except BrokenPipeError:
             response = "BrokenPipeError Caught during Broadcasting Selectively"
             logging(response)
@@ -383,12 +397,17 @@ def broadcast_selective(raw_msg,client_list,system=False):
 def update_upon_login(client):
     response = "Loading Chats for <%s>" %(clients[client])
     logging(response)
-    with open(r"chat_backup.txt","r") as chat_backup:
+    with open("database/backup/chat_backup.txt","r") as chat_backup:
         lines = chat_backup.read().splitlines()   #For safety max. number of bytes are mentioned
         for line in lines:
-            modified_line = "<SYSTEM>"+line[6:]
-            modified_line = ("%04d" %len(modified_line))+modified_line
-            client.sendall(bytes(modified_line,"utf-8"))
+            #modified_line = "<SYSTEM>"+line[6:]
+            sender,modified_line = int(line[1:5]),line[6:]
+            #modified_line = ("%04d" %len(modified_line))+modified_line
+            #client.sendall(bytes(modified_line,"utf-8"))
+            if sender==0:
+                broadcast_selective(bytes(modified_line,"utf-8"),[client],system=True)
+            if sender==1:
+                broadcast_selective(bytes(modified_line,"utf-8"),[client])
     return
 
 def logging(msg):
@@ -401,6 +420,17 @@ def logging(msg):
     timestamp = str(datetime.datetime.now().time())
     logfile.write("["+timestamp+"]:"+msg+"\n")
     logfile.close()
+
+def chat_backup(msg):
+    try:
+        backup = open("database/backup/chat_backup.txt","a")
+    except:
+        os.makedirs("database")
+        backup = open("database/backup/chat_backup.txt","a")
+    #timestamp = str(datetime.datetime.now().time())[:5]
+    backup.write(msg+"\n")
+    backup.close()
+    
 
 
 if __name__ == "__main__":
@@ -429,7 +459,7 @@ if __name__ == "__main__":
                 print(response)
             elif z == "<DELETE CHAT BACKUP>":
                 if len(user_client)==0:
-                    open("chat_backup.txt","w").close()
+                    open("database/backup/chat_backup.txt","w").close()
                     response = "<SYSTEM>:Data Cleared Successfully"
                     logging(response)
                     print("<SYSTEM>:Data Cleared Successfully")
