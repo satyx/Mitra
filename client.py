@@ -82,7 +82,6 @@ def send(event=None):  # event is passed by binders.
 
 def on_closing(event=None):
     """This function is to be called when the window is closed."""
-    top.quit()
     my_msg.set("<QUIT>")
     send()
     top.quit()
@@ -171,6 +170,23 @@ def login(client):
         return False
 
 
+def Interact_Terminal(top,socket):
+    print("Interaction Terminal Activated. Type <QUIT> to log out ")
+    while True:
+        x = input("Input:")
+        if stop_threads == True:
+            return
+        if x == "<QUIT>":
+            my_msg.set("<QUIT>")
+            send()
+            socket.close()
+            top.quit()
+            print("Successfully logged out")
+            return
+        else:
+            print("<SYSTEM>:Unknown Command")
+
+
 if __name__ == "__main__":
     
     HOST = input('Enter host: ')
@@ -185,78 +201,84 @@ if __name__ == "__main__":
     ADDR = (HOST, PORT)
     
     #----Now comes the sockets part----
-    
-    try:
-        top = None #GUI Instance
-        client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        # Note: Keeping the flag setblocking as False would lead to trigger actions on the client side
-                #Even if the connection is still not established
-        #client_socket.setblocking(False)        #Don't wait or "hang" for the connection to establish
-        #client_socket.connect_ex(ADDR)          #sock.connect() would have immediately raised an error as sock.setblocking()
-                                                # is set false
-        client_socket.connect(ADDR)
-        while True:
-            choice = input("1. Chatroom\n2. Signup\n3. Quit\nInput:")
-            choice_msg = ("%04d" %len(choice))+choice
-            if choice=="1":
-                client_socket.sendall(bytes(choice_msg,"utf-8"))
-                if login(client_socket):
-                    break
-                else:
+    while True:
+        try:
+        
+            top = None #GUI Instance
+            client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            # Note: Keeping the flag setblocking as False would lead to trigger actions on the client side
+                    #Even if the connection is still not established
+            #client_socket.setblocking(False)        #Don't wait or "hang" for the connection to establish
+            #client_socket.connect_ex(ADDR)          #sock.connect() would have immediately raised an error as sock.setblocking()
+                                                    # is set false
+            client_socket.connect(ADDR)
+            while True:
+                choice = input("1. Chatroom\n2. Signup\n3. Quit\nInput:")
+                choice_msg = ("%04d" %len(choice))+choice
+                if choice=="1":
+                    client_socket.sendall(bytes(choice_msg,"utf-8"))
+                    if login(client_socket):
+                        break
+                    else:
+                        continue
+                elif choice=="2":
+                    client_socket.sendall(bytes(choice_msg,"utf-8"))
+                    if client_signup(client_socket):
+                        print("Successful Registration")
+                    else:
+                        print("Unsuccessful Registration")
                     continue
-            elif choice=="2":
-                client_socket.sendall(bytes(choice_msg,"utf-8"))
-                if client_signup(client_socket):
-                    print("Successful Registration")
+                elif choice=="3":
+                    client_socket.sendall(bytes(choice_msg,"utf-8"))
+                    #trash = client_socket.recv(BUFSIZ)
+                    client_socket.close()
+                    sys.exit(1)
+                    #print(1)
                 else:
-                    print("Unsuccessful Registration")
-                continue
-            elif choice=="3":
-                client_socket.sendall(bytes(choice_msg,"utf-8"))
-                #trash = client_socket.recv(BUFSIZ)
-                client_socket.close()
-                sys.exit(1)
-                #print(1)
-            else:
-                print("Invalid choice Entered")
-                
-        top = tkinter.Tk()
-        top.title("Mitra")
+                    print("Invalid choice Entered")
+                    
+            top = tkinter.Tk()
+            top.title("Mitra")
 
-        messages_frame = tkinter.Frame(top)
-        my_msg = tkinter.StringVar()  # For the messages to be sent.
-        my_msg.set("Type your messages here.")
-        scrollbar = tkinter.Scrollbar(messages_frame)  # To navigate through past messages.
-        # Following will contain the messages.
-        msg_list = tkinter.Listbox(messages_frame, height=15, width=50, yscrollcommand=scrollbar.set)
-        scrollbar.pack(side=tkinter.RIGHT, fill=tkinter.Y)
-        msg_list.pack(side=tkinter.LEFT, fill=tkinter.BOTH)
-        msg_list.pack()
-        messages_frame.pack()
+            messages_frame = tkinter.Frame(top)
+            my_msg = tkinter.StringVar()  # For the messages to be sent.
+            my_msg.set("Type your messages here.")
+            scrollbar = tkinter.Scrollbar(messages_frame)  # To navigate through past messages.
+            # Following will contain the messages.
+            msg_list = tkinter.Listbox(messages_frame, height=15, width=50, yscrollcommand=scrollbar.set)
+            scrollbar.pack(side=tkinter.RIGHT, fill=tkinter.Y)
+            msg_list.pack(side=tkinter.LEFT, fill=tkinter.BOTH)
+            msg_list.pack()
+            messages_frame.pack()
 
-        entry_field = tkinter.Entry(top, textvariable=my_msg)
-        entry_field.bind("<Return>", send)
-        entry_field.pack()
-        send_button = tkinter.Button(top, text="Send", command=send)
-        send_button.pack()
+            entry_field = tkinter.Entry(top, textvariable=my_msg)
+            entry_field.bind("<Return>", send)
+            entry_field.pack()
+            send_button = tkinter.Button(top, text="Send", command=send)
+            send_button.pack()
 
-        top.protocol("WM_DELETE_WINDOW", on_closing)
+            top.protocol("WM_DELETE_WINDOW", on_closing)
 
-        receive_thread = Thread(target=receive,daemon=True)
-        receive_thread.start()
-        
-
-        tkinter.mainloop()  # Starts GUI execution.
-    except KeyboardInterrupt:
-        #print(2)
-        print("Caught Keyboard interrupt.Exitting")
-        client_socket.close()
-        if top:
-            top.quit()
-        sys.exit(1)
-    except ConnectionRefusedError:
-        print("The server (%s:%s) is not active. Exitting..." %ADDR)
-        if top != None:
-            top.quit()
-        sys.exit(1)
-        
+            receive_thread = Thread(target=receive,daemon=True)
+            stop_threads = False
+            interaction_thread = Thread(target=Interact_Terminal,args=(top,client_socket),daemon=True)
+            receive_thread.start()
+            interaction_thread.start()
+            tkinter.mainloop()  # Starts GUI execution.
+            stop_threads = True
+            top.after(1,top.destroy)
+            
+            interaction_thread.join()
+        except KeyboardInterrupt:
+            #print(2)
+            print("Caught Keyboard interrupt.Exitting")
+            client_socket.close()
+            if top:
+                top.quit()
+            sys.exit(1)
+        except ConnectionRefusedError:
+            print("The server (%s:%s) is not active. Exitting..." %ADDR)
+            if top != None:
+                top.quit()
+            sys.exit(1)
+            
