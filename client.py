@@ -9,6 +9,8 @@ import shutil
 import os
 
 def system_instruction(msg,client_socket):
+    timestamp,msg = msg[-8:],msg[:-8]
+            
     if msg=="<EXIT>":
         client_socket.close()
         top.quit()
@@ -17,7 +19,6 @@ def system_instruction(msg,client_socket):
         if msg[-1]=="*":
             msg_list.insert(tkinter.END, msg)
         else:
-            timestamp,msg = msg[-7:],msg[:-7]
             msg_list.insert(tkinter.END, msg+" "+timestamp)
 
 def receive():
@@ -29,7 +30,7 @@ def receive():
             while True:
                 msg_length = int(client_socket.recv(4).decode("utf-8"))
                 msg_slice = client_socket.recv(msg_length).decode("utf-8")
-                if not msg_slice or msg_slice=="<EXIT>":
+                if not msg_slice or msg_slice[:-8]=="<EXIT>":
                     client_socket.close()
                     top.quit()
                     break
@@ -43,6 +44,11 @@ def receive():
                 else:
                     msg += msg_slice[7:]
         except OSError:  # Possibly client has left the chat.
+            break
+        except e:
+            print("Exception Caught while Listening. Exitting")
+            client_socket.close()
+            top.quit()
             break
 
         if system_flag:
