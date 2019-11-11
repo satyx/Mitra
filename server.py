@@ -69,7 +69,7 @@ def authentication(client,client_address):         # Returns <credentials' valid
             logging("<LOGIN>:Invalid Username <%s>. Authetication Failed!"%(username))
             client.close()
             return invalid,True,None
-        elif username == "<QUIT>":
+        elif username == "<EXIT>":
             logging("<LOGIN>:Invalid Username <%s>. Authetication Failed!"%(username))
             broadcast_selective(bytes("N", "utf8"),[client],system=True)
             return invalid,True,None
@@ -82,7 +82,7 @@ def authentication(client,client_address):         # Returns <credentials' valid
             logging("<LOGIN>:Invalid Password for the user <%s>. Authentication Failed!"%(username))
             client.close()
             return invalid,True,None
-        elif password == "<QUIT>":
+        elif password == "<EXIT>":
             logging("<LOGIN>:Invalid Password for the user <%s>. Authentication Failed!"%(username))
             broadcast_selective(bytes("N-I", "utf8"),[client],system=True)
             return invalid,True,None
@@ -204,8 +204,8 @@ def handle_client(client,client_address):  # Takes client socket as argument.
                 response = "<QUERY>:Invalid Query Requested. Closing Connection by <%s:%s>" %(client_address)
                 logging(response)
                 print(response)
-                broadcast_selective(bytes("<QUIT>", "utf8"),[client])
-                #client.sendall(bytes("<QUIT>", "utf8"))
+                broadcast_selective(bytes("<EXIT>", "utf8"),[client])
+                #client.sendall(bytes("<EXIT>", "utf8"))
                 last_client = None
                 client.close()
                 return
@@ -224,7 +224,7 @@ def handle_client(client,client_address):  # Takes client socket as argument.
     
 
     update_upon_login(client)
-    welcome = '****Welcome ! If you ever want to quit, type <QUIT> to Exit****'
+    welcome = '****Welcome ! If you ever want to quit, type <EXIT> to Exit****'
     broadcast_selective(bytes(welcome, "utf8"),[client],system=True)
     msg = "%s has joined the chat!" % username
     broadcast_global(bytes(msg, "utf8"),client_address,system=True)
@@ -236,14 +236,14 @@ def handle_client(client,client_address):  # Takes client socket as argument.
             while True:
                 size = int(client.recv(4).decode("utf-8"))
                 if not size:
-                    broadcast_selective(bytes("<QUIT>", "utf8"),[client],system=True)
+                    broadcast_selective(bytes("<EXIT>", "utf8"),[client],system=True)
                     client.close()
                     del user_client[clients[client]]
                     del clients[client]
                     return
                 msg_sliced = client.recv(size).decode("utf-8")
                 if not msg_sliced:
-                    broadcast_selective(bytes("<QUIT>", "utf8"),[client],system=True)
+                    broadcast_selective(bytes("<EXIT>", "utf8"),[client],system=True)
                     client.close()
                     del user_client[clients[client]]
                     del clients[client]
@@ -254,10 +254,10 @@ def handle_client(client,client_address):  # Takes client socket as argument.
                 msg+=msg_sliced[7:]
             msg = bytes(msg,"utf-8")
             
-            if msg != bytes("<QUIT>", "utf8"):
+            if msg != bytes("<EXIT>", "utf8"):
                 broadcast_global(msg,client_address, "["+username+"]: ")
             else:
-                broadcast_selective(bytes("<QUIT>", "utf8"),[client],system=True)
+                broadcast_selective(bytes("<EXIT>", "utf8"),[client],system=True)
                 last_client = None
                 client.close()
                 print("<%s> successfully logged out" %(clients[client]))
@@ -292,8 +292,8 @@ def broadcast_global(raw_msg,client_address=None, prefix="",system=False):  # pr
         raw_msg = prefix+raw_msg
     
     timestamp = "["+str(datetime.datetime.now().time())[:5]+"]"
-    raw_msg = raw_msg+timestamp
-    if raw_msg[:-7]!="<QUIT>":
+    raw_msg = raw_msg+" "+timestamp
+    if raw_msg[:-8]!="<EXIT>":
         if system:
             logging("<BROADCAST> By Server")
             chat_backup("<0000>"+raw_msg)
@@ -441,16 +441,16 @@ if __name__ == "__main__":
         SERVER.listen(5)
         print("Waiting for connection...")
         ACCEPT_THREAD = Thread(target=accept_incoming_connections,daemon=True) #Stop execution of ACCEPT_THREAD as soon as server terminates
-        print("-----Enter <QUIT> to exit-----")
+        print("-----Enter <EXIT> to exit-----")
         ACCEPT_THREAD.start()
         while True:
             z = input()
             logging("<INPUT>:"+z)
-            if z == "<QUIT>":
+            if z == "<EXIT>":
                 response = "<SYSTEM>:Closing Server. Aborting!"
                 logging(response)
                 print("<SYSTEM>:Closing Server. Aborting!")
-                broadcast_global(bytes("<QUIT>","utf-8"),system=True)
+                broadcast_global(bytes("<EXIT>","utf-8"),system=True)
                 SERVER.close()
                 sys.exit(1)
             elif z == "<ACTIVE USERS>":
@@ -481,8 +481,8 @@ if __name__ == "__main__":
         for client in clients:
             response = "*****Server Disconnected*****"
             logging(response)
-            broadcast_global(bytes("<QUIT>", "utf8"),system=True)
-            #client.sendall(bytes("<QUIT>", "utf8"))
+            broadcast_global(bytes("<EXIT>", "utf8"),system=True)
+            #client.sendall(bytes("<EXIT>", "utf8"))
             
         SERVER.close()
         sys.exit(1)

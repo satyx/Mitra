@@ -5,15 +5,20 @@ import tkinter
 import time
 import hashlib
 import getpass
+import shutil
+import os
 
 def system_instruction(msg,client_socket):
-    if msg=="<QUIT>":
+    if msg=="<EXIT>":
         client_socket.close()
         top.quit()
         sys.exit(1)
     else:
-        timestamp,msg = msg[-7:],msg[:-7]
-        msg_list.insert(tkinter.END, msg+" "+timestamp)
+        if msg[-1]=="*":
+            msg_list.insert(tkinter.END, msg)
+        else:
+            timestamp,msg = msg[-7:],msg[:-7]
+            msg_list.insert(tkinter.END, msg+" "+timestamp)
 
 def receive():
     """Handles receiving of messages."""
@@ -24,7 +29,7 @@ def receive():
             while True:
                 msg_length = int(client_socket.recv(4).decode("utf-8"))
                 msg_slice = client_socket.recv(msg_length).decode("utf-8")
-                if not msg_slice or msg_slice=="<QUIT>":
+                if not msg_slice or msg_slice=="<EXIT>":
                     client_socket.close()
                     top.quit()
                     break
@@ -71,7 +76,7 @@ def send(event=None):  # event is passed by binders.
             msg_slice = str("%04d"%len(msg_slice))+msg_slice
             client_socket.sendall(bytes(msg_slice, "utf8"))
         client_socket.sendall(bytes("0005<END>", "utf8"))
-        if len(msg)==10 and msg[4:] == "<QUIT>":
+        if len(msg)==10 and msg[4:] == "<EXIT>":
             client_socket.close()
             top.quit()
     except KeyboardInterrupt:
@@ -89,7 +94,7 @@ def send(event=None):  # event is passed by binders.
 def on_closing(event=None):
     """This function is to be called when the window is closed."""
     try:
-        my_msg.set("<QUIT>")
+        my_msg.set("<EXIT>")
         send()
         top.quit()
     except:
@@ -179,13 +184,13 @@ def login(client):
 
 
 def Interact_Terminal(top,socket):
-    print("Interaction Terminal Activated. Type <QUIT> to log out ")
+    print("Interaction Terminal Activated. Type <EXIT> to log out ")
     while True:
         x = input("Input:")
         if stop_threads == True:
             return
-        if x == "<QUIT>":
-            my_msg.set("<QUIT>")
+        if x == "<EXIT>":
+            my_msg.set("<EXIT>")
             send()
             socket.close()
             top.quit()
@@ -196,6 +201,11 @@ def Interact_Terminal(top,socket):
 
 if __name__ == "__main__":
     
+        
+    title = "\u0332M\u0332I\u0332T\u0332R\u0332A\u0332 \u0332"
+    columns = shutil.get_terminal_size().columns
+    print(title.center(columns))
+    print()
     HOST = input('Enter host: ')
     PORT = input('Enter port: ')
     #print(3)
@@ -208,6 +218,8 @@ if __name__ == "__main__":
     ADDR = (HOST, PORT)
     
     #----Now comes the sockets part----
+    _ = os.system("clear")
+    print(title.center(columns))
     while True:
         try:
         
@@ -220,6 +232,9 @@ if __name__ == "__main__":
                                                     # is set false
             client_socket.connect(ADDR)
             while True:
+                print()
+                print(" \u0332M\u0332A\u0332I\u0332N\u0332 \u0332M\u0332E\u0332N\u0332U\u0332 \u0332")
+                print()
                 choice = input("1. Chatroom\n2. Signup\n3. Quit\nInput:")
                 choice_msg = ("%04d" %len(choice))+choice
                 if choice=="1":
