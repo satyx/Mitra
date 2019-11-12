@@ -42,7 +42,7 @@ def accept_incoming_connections():
             addresses[client] = client_address
             Thread(target=handle_client, args=(client,client_address,)).start()
     except KeyboardInterrupt:
-        response = "Caught Keyboard Interrupt while accepting connections"
+        response = "\nCaught Keyboard Interrupt while accepting connections"
         logging(response)
         print(response)
     finally:
@@ -53,7 +53,11 @@ def authentication(client,client_address):         # Returns <credentials' valid
     #broadcast_selective(bytes("Enter Your Username", "utf8"),[client])
     try:
 
-        username_length = int(client.recv(4).decode("utf8"))
+        username_length = client.recv(4).decode("utf8")
+        if not username_length:
+            client.close()
+            return None,False,None
+        username_length = int(username_length)
         logging("<LOGIN>:Username size received")
         username = client.recv(username_length).decode("utf8")
         logging("<LOGIN>:Username received")
@@ -61,10 +65,15 @@ def authentication(client,client_address):         # Returns <credentials' valid
         #    if username[index]=="#":
         #        username = username[:index]
         #        break
-        password_length = int(client.recv(4).decode("utf8"))    #Password length is fixed(=64, hashed string) but to maintain uniformity we are accepting it's length
+        password_length = client.recv(4).decode("utf8")    #Password length is fixed(=64, hashed string) but to maintain uniformity we are accepting it's length
+        if not password_length:
+            client.close()
+            return None,False,None
+        password_length = int(password_length)
         logging("<LOGIN>:Password size received")
         password = client.recv(password_length).decode("utf8")
         logging("<LOGIN>:Password received")
+
         if not username:
             logging("<LOGIN>:Invalid Username <%s>. Authetication Failed!"%(username))
             client.close()
@@ -112,14 +121,29 @@ def authentication(client,client_address):         # Returns <credentials' valid
 def client_signup(client,client_address):              #Vulnerable. Returns userID,status,connection
     global userbase
     try:
-        username_length = int(client.recv(4).decode("utf-8"))
+        username_length = client.recv(4).decode("utf-8")
+        if not username_length:
+            client.close()
+            return None,None,False
+        username_length = len(username_length)
         logging("<SIGNUP>:Username size received")
         username = client.recv(username_length).decode("utf-8")
+        if not username:
+            client.close()
+            return None,None,False
         logging("<SIGNUP>:Username received")
 
-        password_length = int(client.recv(4).decode("utf-8"))
+        password_length = client.recv(4).decode("utf-8")
+        if not password_length:
+            client.close()
+            return None,None,False
+        password_length = int(password_length)
+
         logging("<SIGNUP>:Password size received")
         password = client.recv(password_length).decode("utf-8")
+        if not password:
+            client.close()
+            return None,None,False
         logging("<SIGNUP>:Password received")
     except:
         response = "<SIGNUP>:SignUp Exception Raised at <%s:%s>" %(client_address)
@@ -145,7 +169,13 @@ def handle_client(client,client_address):  # Takes client socket as argument.
 
     try:
         while True:
-            choice_length = int(client.recv(4).decode("utf-8"))
+            choice_length = client.recv(4).decode("utf-8")
+            if not choice_length:
+                response = "%s:%s has disconnected." % client_address
+                logging(response)
+                print(response)
+                return
+            choice_length = int(choice_length)    
             logging("<QUERY>:query length received")
             choice = client.recv(choice_length).decode("utf-8")
             logging("<QUERY>:query received")
@@ -234,13 +264,14 @@ def handle_client(client,client_address):  # Takes client socket as argument.
         while True:
             msg = ""
             while True:
-                size = int(client.recv(4).decode("utf-8"))
+                size = client.recv(4).decode("utf-8")
                 if not size:
                     broadcast_selective(bytes("<EXIT>", "utf8"),[client],system=True)
                     client.close()
                     del user_client[clients[client]]
                     del clients[client]
                     return
+                size = int(size)
                 msg_sliced = client.recv(size).decode("utf-8")
                 if not msg_sliced:
                     broadcast_selective(bytes("<EXIT>", "utf8"),[client],system=True)
@@ -474,7 +505,7 @@ if __name__ == "__main__":
         ACCEPT_THREAD.join()
         SERVER.close()
     except KeyboardInterrupt:
-        response = "<SYSTEM>:Caught Keyboard Interrupt"
+        response = "\n<SYSTEM>:Caught Keyboard Interrupt"
         logging(response)
         print(response)
         

@@ -8,32 +8,53 @@ import getpass
 import shutil
 import os
 
+online = False      #Active Status
+
 def system_instruction(msg,client_socket):
+    global online
+
+    if msg=="EXIT":
+        return
     timestamp,msg = msg[-8:],msg[:-8]
-            
-    if msg=="<EXIT>":
-        client_socket.close()
-        top.quit()
-        sys.exit(1)
-    else:
-        if msg[-1]=="*":
-            msg_list.insert(tkinter.END, msg)
+    try:
+        if msg=="<EXIT>":
+            quit_gui(client_socket,top)
+            sys.exit(1)
         else:
-            msg_list.insert(tkinter.END, msg+" "+timestamp)
+            if len(msg)>0 and msg[-1]=="*":
+                msg_list.insert(tkinter.END, msg)
+            else:
+                msg_list.insert(tkinter.END, msg+" "+timestamp)
+    except RuntimeError:
+        return
+
+
+def quit_gui(client_socket,top=None):
+    global online
+    if online:
+        client_socket.close()
+        if top:
+            top.quit()
+        online = False
+
 
 def receive():
     """Handles receiving of messages."""
+    global online
     while True:
         msg = ""
         system_flag = False
         try:
             while True:
-                msg_length = int(client_socket.recv(4).decode("utf-8"))
+                msg_length = client_socket.recv(4).decode("utf-8")
+                if not msg_length:
+                    quit_gui(client_socket,top)
+                    return
+                msg_length = int(msg_length)
                 msg_slice = client_socket.recv(msg_length).decode("utf-8")
                 if not msg_slice or msg_slice[:-8]=="<EXIT>":
-                    client_socket.close()
-                    top.quit()
-                    break
+                    quit_gui(client_socket,top)
+                    return
 
                 if msg_slice[:8]=="<SYSTEM>":
                     msg+=msg_slice[8:]
@@ -45,10 +66,13 @@ def receive():
                     msg += msg_slice[7:]
         except OSError:  # Possibly client has left the chat.
             break
-        except e:
+        except ValueError:
+            quit_gui(client_socket,top)
+            break
+
+        except:
             print("Exception Caught while Listening. Exitting")
-            client_socket.close()
-            top.quit()
+            quit_gui(client_socket,top)
             break
 
         if system_flag:
@@ -64,13 +88,11 @@ def receive():
                 if index==0:
                     msg_slice = msg_slice+" "+timestamp
                 msg_list.insert(tkinter.END, msg_slice)
-                
-
-
 
 
 def send(event=None):  # event is passed by binders.
     """Handles sending of messages."""
+    global online
     try:
         msg = my_msg.get().strip()
         my_msg.set("")  # Clears input field.
@@ -83,30 +105,31 @@ def send(event=None):  # event is passed by binders.
             client_socket.sendall(bytes(msg_slice, "utf8"))
         client_socket.sendall(bytes("0005<END>", "utf8"))
         if len(msg)==10 and msg[4:] == "<EXIT>":
-            client_socket.close()
-            top.quit()
+            quit_gui(client_socket,top)
     except KeyboardInterrupt:
-        print("Caught Keyboard interrupt.Exitting")
-        client_socket.close()
-        top.quit()
+        print("\nCaught Keyboard interrupt.Exitting")
+        quit_gui(client_socket,top)
         sys.exit(1)
     except BrokenPipeError:
         print("Broken Pipe Error")
-        client_socket.close()
-        top.quit()
+        quit_gui(client_socket,top)
         sys.exit(1)
     
 
 def on_closing(event=None):
     """This function is to be called when the window is closed."""
+    global online
     try:
         my_msg.set("<EXIT>")
         send()
-        top.quit()
+        if online:
+            top.quit()
     except:
         print("Exception Raised while closing")
-def client_signup(client):
 
+
+def client_signup(client):
+    global online
     #For UI
     while True:
         username = input("Enter Desired Username(max 20 characters):")    #Vulnerable
@@ -135,22 +158,28 @@ def client_signup(client):
         hashpassword = ("%04d" %len(hashpassword))+hashpassword
         client.sendall(bytes(hashpassword,"utf-8"))
 
-        status_length = int(client.recv(4).decode("utf-8"))
+        status_length = client.recv(4).decode("utf-8")
+        if not status_length:
+            quit_gui(client,top=None)
+            sys.exit(1)
+        status_length = int(status_length)
         status = client.recv(status_length).decode("utf-8")
         if not status or status[:8] != "<SYSTEM>":
-            client.close()
+            quit_gui(client,top=None)
             sys.exit(1)
     except ConnectionError:
         print("Connection closed. Please reconnect to the server")
-        client.close()
+        quit_gui(client,top=None)
         sys.exit(1)
     
     if status[8:]=='Y':
         return True
     else:
         return False
+
     
 def login(client):
+    global online
     #prompt = client.recv(1024).decode("utf-8")
     username = input("Username:")
     password = getpass.getpass("Password:")
@@ -167,15 +196,18 @@ def login(client):
         client.sendall(bytes(padded_username,"utf-8"))
         client.sendall(bytes(padded_hashed_password,"utf-8"))
 
-        status_length = int(client.recv(4).decode("utf-8"))
+        status_length = client.recv(4).decode("utf-8")
+        if not status_length:
+            quit_gui(client,top=None)
+            sys.exit(1)
+        status_length = int(status_length)
         status = client.recv(status_length).decode("utf-8")
         if not status or status[:8] != "<SYSTEM>":
-            client.close()
+            quit_gui(client,top=None)
             sys.exit(1)
-
     except:
         print("Exception Raised at login()")
-        client.close()
+        quit_gui(client,top=None)
         sys.exit(1)
 
     if status[8:9] == "Y":
@@ -190,6 +222,7 @@ def login(client):
 
 
 def Interact_Terminal(top,socket):
+    global online
     print("Interaction Terminal Activated. Type <EXIT> to log out ")
     while True:
         x = input("Input:")
@@ -198,22 +231,23 @@ def Interact_Terminal(top,socket):
         if x == "<EXIT>":
             my_msg.set("<EXIT>")
             send()
-            socket.close()
-            top.quit()
+            quit_gui(client_socket,top)
             return
         else:
             print("<SYSTEM>:Unknown Command")
 
 
-if __name__ == "__main__":
-    
-        
+if __name__ == "__main__":        
     title = "\u0332M\u0332I\u0332T\u0332R\u0332A\u0332 \u0332"
     columns = shutil.get_terminal_size().columns
     print(title.center(columns))
     print()
-    HOST = input('Enter host: ')
-    PORT = input('Enter port: ')
+    try:
+        HOST = input('Enter host: ')
+        PORT = input('Enter port: ')
+    except KeyboardInterrupt:
+        print("\nCaught Keyboard interrupt.Exitting")
+        sys.exit(1)
     #print(3)
     if not PORT:
         PORT = 33000
@@ -258,15 +292,14 @@ if __name__ == "__main__":
                     continue
                 elif choice=="3":
                     client_socket.sendall(bytes(choice_msg,"utf-8"))
-                    #trash = client_socket.recv(BUFSIZ)
                     client_socket.close()
                     sys.exit(1)
-                    #print(1)
                 else:
                     print("Invalid choice Entered")
                     
             top = tkinter.Tk()
             top.title("Mitra")
+            online = True
 
             messages_frame = tkinter.Frame(top)
             my_msg = tkinter.StringVar()  # For the messages to be sent.
@@ -294,20 +327,19 @@ if __name__ == "__main__":
             interaction_thread.start()
             tkinter.mainloop()  # Starts GUI execution.
             stop_threads = True
-            top.after(1,top.destroy)
             interaction_thread.join()
+            top.after(1,top.destroy)
             print("Successfully Logged Out")
             
         except KeyboardInterrupt:
             #print(2)
-            print("Caught Keyboard interrupt.Exitting")
-            client_socket.close()
-            if top:
-                top.quit()
+            print("\nCaught Keyboard interrupt.Exitting")
+            if online:
+                quit_gui(client_socket,top)
             sys.exit(1)
         except ConnectionRefusedError:
             print("The server (%s:%s) is not active. Exitting..." %ADDR)
-            if top != None:
-                top.quit()
+            if online:
+                quit_gui(client_socket,top)
             sys.exit(1)
             
