@@ -14,12 +14,13 @@ def system_instruction(msg,client_socket):
     global online
 
     if msg=="EXIT":
+        quit_gui(client_socket,top)
         return
     timestamp,msg = msg[-8:],msg[:-8]
     try:
         if msg=="<EXIT>":
             quit_gui(client_socket,top)
-            sys.exit(1)
+            return
         else:
             if len(msg)>0 and msg[-1]=="*":
                 msg_list.insert(tkinter.END, msg)
@@ -36,6 +37,7 @@ def quit_gui(client_socket,top=None):
         if top:
             top.quit()
         online = False
+        print("\n<Press Enter to Quit>")
 
 
 def receive():
@@ -105,6 +107,7 @@ def send(event=None):  # event is passed by binders.
             client_socket.sendall(bytes(msg_slice, "utf8"))
         client_socket.sendall(bytes("0005<END>", "utf8"))
         if len(msg)==10 and msg[4:] == "<EXIT>":
+            
             quit_gui(client_socket,top)
     except KeyboardInterrupt:
         print("\nCaught Keyboard interrupt.Exitting")
@@ -119,13 +122,13 @@ def send(event=None):  # event is passed by binders.
 def on_closing(event=None):
     """This function is to be called when the window is closed."""
     global online
-    try:
-        my_msg.set("<EXIT>")
-        send()
-        if online:
+    if online:    
+        try:
+            my_msg.set("<EXIT>")
+            send()
             top.quit()
-    except:
-        print("Exception Raised while closing")
+        except:
+            print("Exception Raised while closing")
 
 
 def client_signup(client):
@@ -225,16 +228,23 @@ def Interact_Terminal(top,socket):
     global online
     print("Interaction Terminal Activated. Type <EXIT> to log out ")
     while True:
-        x = input("Input:")
-        if stop_threads == True:
-            return
-        if x == "<EXIT>":
-            my_msg.set("<EXIT>")
-            send()
-            quit_gui(client_socket,top)
-            return
-        else:
-            print("<SYSTEM>:Unknown Command")
+        try:
+            x = input("Input:")
+            if not online:
+                return
+            if stop_threads == True:
+                return
+            if x == "<EXIT>":
+                my_msg.set("<EXIT>")
+                send()
+                quit_gui(client_socket,top)
+                return
+            else:
+                print("<SYSTEM>:Unknown Command")
+        except:
+            print("The server (%s:%s) is not active. Exitting..." %ADDR)
+            quit_gui(socket,top)
+            sys.exit(1)
 
 
 if __name__ == "__main__":        
@@ -245,15 +255,17 @@ if __name__ == "__main__":
     try:
         HOST = input('Enter host: ')
         PORT = input('Enter port: ')
+
+        if not PORT:
+            PORT = 33000
+        else:
+            PORT = int(PORT)
     except KeyboardInterrupt:
         print("\nCaught Keyboard interrupt.Exitting")
         sys.exit(1)
-    #print(3)
-    if not PORT:
-        PORT = 33000
-    else:
-        PORT = int(PORT)
-
+    except ValueError:
+        print("Invalid Port")
+        sys.exit(1)
     BUFSIZ = 1024
     ADDR = (HOST, PORT)
     
@@ -342,4 +354,10 @@ if __name__ == "__main__":
             if online:
                 quit_gui(client_socket,top)
             sys.exit(1)
-            
+        except OSError as err:
+            if err.errno==101:
+                print("Unreachable Network. Exiting!!")
+            elif err.errno==22:
+                print("Invalid Host Address <%s:%s>. Exiting!!"%(HOST,PORT))
+            sys.exit(1)
+

@@ -401,7 +401,7 @@ def broadcast_selective(raw_msg,client_list,system=False):
             response = "BrokenPipeError Caught during Broadcasting Selectively"
             logging(response)
             print(response)
-            invalid_clients.append(client_list[index])
+            invalid_clients[client] = clients[client]
             continue
         except OSError:
             response = "OSError Caught during Broadcasting Globally"
