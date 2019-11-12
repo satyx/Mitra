@@ -125,7 +125,7 @@ def client_signup(client,client_address):              #Vulnerable. Returns user
         if not username_length:
             client.close()
             return None,None,False
-        username_length = len(username_length)
+        username_length = int(username_length)
         logging("<SIGNUP>:Username size received")
         username = client.recv(username_length).decode("utf-8")
         if not username:
